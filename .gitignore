@@ -1,0 +1,30 @@
+# The working database is binary: git cannot diff it and every edit rewrites
+# the whole blob. The versioned copy lives in data/ as text - see snapshot.py.
+valves.db
+*.db
+*.db-journal
+*.db-wal
+
+# The datasheet archive: hundreds of MB of third-party PDFs. Rebuild it with
+# fetch_datasheets.py rather than committing it.
+datasheets/
+url_index.json
+
+# Generated exports
+valve_inventory.xlsx
+*.xlsx
+!examples/*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
