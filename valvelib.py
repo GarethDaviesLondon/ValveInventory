@@ -55,13 +55,25 @@ CREATE TABLE IF NOT EXISTS stock (
     notes        TEXT
 );
 
--- Non-valve items: sockets, screening cans, crystals, chimneys.
+-- Non-valve items: screening cans, crystals, chimneys - the general catch-all.
 CREATE TABLE IF NOT EXISTS sundry (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     box         TEXT NOT NULL,
     description TEXT NOT NULL,
     qty         INTEGER DEFAULT 1,
     notes       TEXT
+);
+
+-- One row per lot of valve bases / sockets - B9A, Octal, B7G, Loctal, UX4...
+-- Split out from sundry so it's searchable by base type rather than buried
+-- in free text.
+CREATE TABLE IF NOT EXISTS socket (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    base      TEXT NOT NULL,
+    box       TEXT NOT NULL,
+    qty       INTEGER NOT NULL DEFAULT 1,
+    condition TEXT,
+    notes     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS box (
@@ -73,6 +85,8 @@ CREATE TABLE IF NOT EXISTS box (
 
 CREATE INDEX IF NOT EXISTS idx_stock_type ON stock(type_key);
 CREATE INDEX IF NOT EXISTS idx_stock_box  ON stock(box);
+CREATE INDEX IF NOT EXISTS idx_socket_base ON socket(base);
+CREATE INDEX IF NOT EXISTS idx_socket_box  ON socket(box);
 
 -- Convenience view: stock joined to its type reference data.
 CREATE VIEW IF NOT EXISTS v_stock AS

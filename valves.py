@@ -85,6 +85,11 @@ def cmd_box(con, a):
     if sund:
         print("\n  other items:")
         table(sund, ["description", "qty"])
+    bases = [dict(r) for r in con.execute(
+        "SELECT base, qty, condition, notes FROM socket WHERE box=? COLLATE NOCASE", (a.box,))]
+    if bases:
+        print("\n  bases/sockets:")
+        table(bases, ["base", "qty", "condition", "notes"])
     print()
 
 
@@ -231,6 +236,64 @@ def cmd_move(con, a):
     print(f"moved {keys[0]} from box {a.frm} to box {a.to}")
 
 
+# ---------------------------------------------------------------- bases/sockets
+
+def cmd_bases(con, a):
+    where, args = ["1=1"], []
+    if a.base:
+        where.append("LOWER(base) LIKE ?")
+        args.append(f"%{a.base.lower()}%")
+    if a.box:
+        where.append("box = ? COLLATE NOCASE")
+        args.append(a.box)
+    rows = [dict(r) for r in con.execute(
+        f"SELECT base, box, qty, condition, notes FROM socket WHERE {' AND '.join(where)} "
+        "ORDER BY base, CAST(box AS INTEGER), box", args)]
+    total = sum(r["qty"] for r in rows)
+    print(f"\n{len(rows)} lots, {total} sockets/bases\n")
+    table(rows, ["base", "box", "qty", "condition", "notes"])
+    print()
+
+
+def cmd_sock_add(con, a):
+    con.execute("INSERT INTO socket (base,box,qty,condition,notes) VALUES (?,?,?,?,?)",
+                (a.base.strip(), a.box, a.qty, a.condition, a.notes))
+    con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.box, "attic"))
+    con.commit()
+    print(f"added {a.qty} x {a.base} to box {a.box}")
+
+
+def cmd_sock_take(con, a):
+    rows = list(con.execute(
+        "SELECT id,box,qty FROM socket WHERE LOWER(base)=?"
+        + (" AND box=? COLLATE NOCASE" if a.box else "") + " ORDER BY qty DESC",
+        (a.base.lower(), a.box) if a.box else (a.base.lower(),)))
+    if not rows:
+        print("none in stock")
+        return
+    left = a.qty
+    for r in rows:
+        if left <= 0:
+            break
+        take = min(left, r["qty"])
+        if take == r["qty"]:
+            con.execute("DELETE FROM socket WHERE id=?", (r["id"],))
+        else:
+            con.execute("UPDATE socket SET qty=qty-? WHERE id=?", (take, r["id"]))
+        print(f"  took {take} from box {r['box']}")
+        left -= take
+    if left:
+        print(f"  short by {left}")
+    con.commit()
+
+
+def cmd_sock_move(con, a):
+    con.execute("UPDATE socket SET box=? WHERE LOWER(base)=? AND box=? COLLATE NOCASE",
+                (a.to, a.base.lower(), a.frm))
+    con.commit()
+    print(f"moved {a.base} from box {a.frm} to box {a.to}")
+
+
 def cmd_set(con, a):
     keys = resolve(con, a.type)
     if not keys:
@@ -364,6 +427,7 @@ def cmd_stats(con, a):
     print(f"  boxes in use     {q('SELECT COUNT(DISTINCT box) FROM stock')}")
     print(f"  datasheets held  {q('SELECT COUNT(*) FROM valve_type WHERE datasheet_path IS NOT NULL')}")
     print(f"""  confirmed params {q("SELECT COUNT(*) FROM valve_type WHERE confidence='confirmed'")}""")
+    print(f"  bases/sockets    {q('SELECT COALESCE(SUM(qty),0) FROM socket')}")
     print("\n  by function:")
     rows = [dict(r) for r in con.execute("""
         SELECT COALESCE(t.function,'(unclassified)') AS function,
@@ -440,6 +504,15 @@ def main():
     except (ImportError, ValueError):
         pass  # not available on Windows
 
+    # Notes carry scraped text with non-Latin scripts (Cyrillic type names,
+    # mu signs); Windows consoles default stdout to cp1252, which can't
+    # encode them and crashes the print. UTF-8 with replacement is safe
+    # everywhere and matches the DB's own encoding.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass  # e.g. stdout replaced by something without reconfigure
+
     p = argparse.ArgumentParser(description="valve stock inventory")
     p.add_argument("--db", default=V.DB_DEFAULT)
     p.add_argument("--archive", default=V.ARCHIVE_DEFAULT)
@@ -470,6 +543,23 @@ def main():
     s = sub.add_parser("move", help="move a type between boxes")
     s.add_argument("type"); s.add_argument("--frm", required=True)
     s.add_argument("--to", required=True); s.set_defaults(fn=cmd_move)
+
+    s = sub.add_parser("bases", help="list valve base/socket stock")
+    s.add_argument("--base"); s.add_argument("--box"); s.set_defaults(fn=cmd_bases)
+
+    s = sub.add_parser("sock-add", help="add base/socket stock")
+    s.add_argument("base"); s.add_argument("--box", required=True)
+    s.add_argument("--qty", type=int, default=1)
+    s.add_argument("--condition"); s.add_argument("--notes")
+    s.set_defaults(fn=cmd_sock_add)
+
+    s = sub.add_parser("sock-take", help="remove base/socket stock")
+    s.add_argument("base"); s.add_argument("--qty", type=int, default=1)
+    s.add_argument("--box"); s.set_defaults(fn=cmd_sock_take)
+
+    s = sub.add_parser("sock-move", help="move base/socket stock between boxes")
+    s.add_argument("base"); s.add_argument("--frm", required=True)
+    s.add_argument("--to", required=True); s.set_defaults(fn=cmd_sock_move)
 
     s = sub.add_parser("set", help="edit a type's reference parameters")
     s.add_argument("type")

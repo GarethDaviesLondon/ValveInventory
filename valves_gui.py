@@ -13,6 +13,8 @@ import re
 import subprocess
 import sys
 import tkinter as tk
+import urllib.parse
+import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,8 +25,32 @@ PAD = 8
 STOCK_COLS = [
     ("box", "Box", 50), ("type", "Type", 100), ("qty", "Qty", 42),
     ("manufacturer", "Maker", 88), ("condition", "Condition", 92),
-    ("function", "Function", 190), ("heater_v", "Htr V", 48),
+    ("base", "Base", 64), ("function", "Function", 190), ("heater_v", "Htr V", 48),
     ("heater_a", "Htr A", 48), ("pa_max", "Pa W", 46), ("sheet", "Sheet", 44),
+]
+
+# Keys that mirror the quick-search row; the advanced dialog edits the same
+# StringVars so the two stay in sync instead of filtering twice.
+ADV_QUICK_KEYS = {"text", "function", "base", "heater_v", "pa_max", "freq_max"}
+
+# Advanced search: comparison-style fields take '>20' / '<7' / '6.3' like the
+# quick-search numeric boxes; the rest are substring matches or a fixed choice.
+ADV_FIELDS = [
+    ("text", "Text", str), ("function", "Function", str), ("base", "Base", str),
+    ("heater_v", "Heater V (e.g. 6.3)", str),
+    ("pa_max", "Pa max W (e.g. >20)", str), ("freq_max", "Freq max MHz (e.g. >100)", str),
+    ("maker", "Manufacturer", str), ("condition", "Condition", str),
+    ("family", "Family", str), ("heater_a", "Heater A (e.g. >0.2)", str),
+    ("va_max", "Va max V (e.g. >250)", str), ("gm", "gm mA/V (e.g. >5)", str),
+    ("mu", "mu (e.g. >20)", str), ("power_out", "Power out W (e.g. >5)", str),
+    ("equivalents", "Equivalents", str),
+    ("confidence", "Confidence", ["", "inferred", "confirmed"]),
+    ("has_sheet", "Has datasheet", ["", "yes", "no"]),
+]
+
+SOCKET_COLS = [
+    ("box", "Box", 60), ("base", "Base", 140), ("qty", "Qty", 50),
+    ("condition", "Condition", 110), ("notes", "Notes", 260),
 ]
 
 TYPE_FIELDS = [
@@ -138,6 +164,11 @@ class App(ttk.Frame):
         self.con = V.init_db(db)
         self.current_type = None
         self.sort_state = {}
+        self.box_sort_state = {}
+        self.box_rows = []
+        self.adv = {}
+        self.sock_rows = []
+        self.sock_sort_state = {}
 
         master.title(f"Valve inventory - {os.path.basename(db)}")
         master.geometry("1280x780")
@@ -145,9 +176,17 @@ class App(ttk.Frame):
         self.pack(fill="both", expand=True)
 
         self._build_menu()
-        self._build_layout()
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True)
+        valves_tab = ttk.Frame(self.nb, padding=PAD)
+        bases_tab = ttk.Frame(self.nb, padding=PAD)
+        self.nb.add(valves_tab, text="Valves")
+        self.nb.add(bases_tab, text="Bases / Sockets")
+        self._build_valves_tab(valves_tab)
+        self._build_bases_tab(bases_tab)
         self.refresh_boxes()
         self.run_search()
+        self.run_sock_search()
 
     # ---------------------------------------------------------------- chrome
 
@@ -170,30 +209,28 @@ class App(ttk.Frame):
         m.add_cascade(label="Tools", menu=t)
         self.master.config(menu=m)
 
-    def _build_layout(self):
+    def _build_valves_tab(self, root):
         # ---- toolbar ----
-        bar = ttk.Frame(self)
+        bar = ttk.Frame(root)
         bar.pack(fill="x", pady=(0, PAD))
         ttk.Button(bar, text="Add stock", command=self.do_add).pack(side="left")
         ttk.Button(bar, text="Take", command=self.do_take).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Move", command=self.do_move).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Delete lot", command=self.do_delete).pack(side="left", padx=(6, 0))
-        ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=PAD)
-        ttk.Button(bar, text="Open datasheet", command=self.do_open_sheet).pack(side="left")
 
         # ---- filter row ----
-        filt = ttk.LabelFrame(self, text="Search", padding=PAD)
+        filt = ttk.LabelFrame(root, text="Search", padding=PAD)
         filt.pack(fill="x", pady=(0, PAD))
 
         self.v_text = tk.StringVar()
         self.v_function = tk.StringVar()
-        self.v_maker = tk.StringVar()
+        self.v_base = tk.StringVar()
         self.v_heater = tk.StringVar()
         self.v_pa = tk.StringVar()
         self.v_freq = tk.StringVar()
 
         specs = [("Text", self.v_text, 20), ("Function", self.v_function, 18),
-                 ("Maker", self.v_maker, 12), ("Heater V", self.v_heater, 8),
+                 ("Base", self.v_base, 12), ("Heater V", self.v_heater, 8),
                  ("Pa W", self.v_pa, 8), ("Freq MHz", self.v_freq, 8)]
         for i, (label, var, w) in enumerate(specs):
             ttk.Label(filt, text=label).grid(row=0, column=i * 2, sticky="e", padx=(0 if i == 0 else PAD, 4))
@@ -206,20 +243,22 @@ class App(ttk.Frame):
         btns.grid(row=0, column=12, padx=(PAD * 2, 0))
         ttk.Button(btns, text="Search", command=self.run_search).pack(side="left")
         ttk.Button(btns, text="Clear", command=self.clear_filters).pack(side="left", padx=(6, 0))
+        self.adv_btn = ttk.Button(btns, text="Advanced...", command=self.do_advanced_search)
+        self.adv_btn.pack(side="left", padx=(6, 0))
 
         # ---- three panes ----
-        panes = ttk.PanedWindow(self, orient="horizontal")
+        panes = ttk.PanedWindow(root, orient="horizontal")
         panes.pack(fill="both", expand=True)
 
         # boxes sidebar
         left = ttk.Frame(panes)
         ttk.Label(left, text="Boxes").pack(anchor="w")
-        self.boxlist = ttk.Treeview(left, columns=("lots", "qty"), height=12)
-        self.boxlist.heading("#0", text="Box")
-        self.boxlist.heading("lots", text="Lots")
-        self.boxlist.heading("qty", text="Valves")
+        self.boxlist = ttk.Treeview(left, columns=("types", "qty"), height=12)
+        self.boxlist.heading("#0", text="Box", command=lambda: self.sort_boxes("box"))
+        self.boxlist.heading("types", text="Types", command=lambda: self.sort_boxes("types"))
+        self.boxlist.heading("qty", text="Qty", command=lambda: self.sort_boxes("qty"))
         self.boxlist.column("#0", width=90)
-        self.boxlist.column("lots", width=48, anchor="e")
+        self.boxlist.column("types", width=48, anchor="e")
         self.boxlist.column("qty", width=58, anchor="e")
         self.boxlist.pack(fill="both", expand=True, pady=(4, 0))
         self.boxlist.bind("<<TreeviewSelect>>", self.on_box_select)
@@ -242,11 +281,19 @@ class App(ttk.Frame):
         mid.rowconfigure(0, weight=1)
         mid.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.on_row_select)
+        self.tree.bind("<Double-1>", lambda e: self.do_open_sheet())
         self.tree.tag_configure("inferred", foreground="#8a6d00")
         panes.add(mid, weight=3)
 
         # detail
         right = ttk.Frame(panes, width=310)
+        sheetbar = ttk.Frame(right)
+        sheetbar.pack(fill="x", pady=(0, PAD))
+        ttk.Button(sheetbar, text="Open datasheet", command=self.do_open_sheet).pack(side="right")
+        ttk.Button(sheetbar, text="RadioMuseum",
+                  command=lambda: self.do_lookup("radiomuseum.org")).pack(side="right", padx=(0, 6))
+        ttk.Button(sheetbar, text="Web search",
+                  command=lambda: self.do_lookup()).pack(side="right", padx=(0, 6))
         self.detail_title = ttk.Label(right, text="", font=("TkDefaultFont", 13, "bold"))
         self.detail_title.pack(anchor="w")
         self.detail_sub = ttk.Label(right, text="", foreground="#666")
@@ -275,20 +322,83 @@ class App(ttk.Frame):
         panes.add(right, weight=1)
 
         # ---- status bar ----
-        self.status = ttk.Label(self, text="", anchor="w", foreground="#444")
+        self.status = ttk.Label(root, text="", anchor="w", foreground="#444")
         self.status.pack(fill="x", pady=(PAD, 0))
+
+    def _build_bases_tab(self, root):
+        bar = ttk.Frame(root)
+        bar.pack(fill="x", pady=(0, PAD))
+        ttk.Button(bar, text="Add", command=self.do_sock_add).pack(side="left")
+        ttk.Button(bar, text="Take", command=self.do_sock_take).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Move", command=self.do_sock_move).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Delete lot", command=self.do_sock_delete).pack(side="left", padx=(6, 0))
+
+        filt = ttk.LabelFrame(root, text="Search", padding=PAD)
+        filt.pack(fill="x", pady=(0, PAD))
+        self.sv_base = tk.StringVar()
+        self.sv_box = tk.StringVar()
+        specs = [("Base", self.sv_base, 18), ("Box", self.sv_box, 10)]
+        for i, (label, var, w) in enumerate(specs):
+            ttk.Label(filt, text=label).grid(row=0, column=i * 2, sticky="e", padx=(0 if i == 0 else PAD, 4))
+            e = ttk.Entry(filt, textvariable=var, width=w)
+            e.grid(row=0, column=i * 2 + 1, sticky="w")
+            e.bind("<Return>", lambda ev: self.run_sock_search())
+        btns = ttk.Frame(filt)
+        btns.grid(row=0, column=4, padx=(PAD * 2, 0))
+        ttk.Button(btns, text="Search", command=self.run_sock_search).pack(side="left")
+        ttk.Button(btns, text="Clear", command=self.clear_sock_filters).pack(side="left", padx=(6, 0))
+
+        mid = ttk.Frame(root)
+        mid.pack(fill="both", expand=True)
+        self.sock_tree = ttk.Treeview(mid, columns=[c[0] for c in SOCKET_COLS],
+                                      show="headings", selectmode="browse", height=16)
+        for key, label, width in SOCKET_COLS:
+            self.sock_tree.heading(key, text=label, command=lambda k=key: self.sort_sock(k))
+            self.sock_tree.column(key, width=width, minwidth=40, stretch=(key == "notes"),
+                                  anchor="e" if key == "qty" else "w")
+        vs = ttk.Scrollbar(mid, orient="vertical", command=self.sock_tree.yview)
+        self.sock_tree.configure(yscrollcommand=vs.set)
+        self.sock_tree.grid(row=0, column=0, sticky="nsew")
+        vs.grid(row=0, column=1, sticky="ns")
+        mid.rowconfigure(0, weight=1)
+        mid.columnconfigure(0, weight=1)
+
+        self.sock_status = ttk.Label(root, text="", anchor="w", foreground="#444")
+        self.sock_status.pack(fill="x", pady=(PAD, 0))
 
     # ---------------------------------------------------------------- data
 
     def refresh_boxes(self):
+        self.box_rows = [dict(r) for r in self.con.execute(
+            "SELECT box, COUNT(DISTINCT type_key) types, SUM(qty) qty FROM stock "
+            "GROUP BY box ORDER BY CAST(box AS INTEGER), box")]
+        self.populate_boxes()
+
+    def populate_boxes(self):
+        sel = self.boxlist.selection()
         self.boxlist.delete(*self.boxlist.get_children())
         self.boxlist.insert("", "end", iid="__all__", text="All boxes", values=("", ""))
-        rows = self.con.execute(
-            "SELECT box, COUNT(*) lots, SUM(qty) qty FROM stock GROUP BY box "
-            "ORDER BY CAST(box AS INTEGER), box")
-        for r in rows:
+        for r in self.box_rows:
             self.boxlist.insert("", "end", iid=r["box"],
-                                text=f"Box {r['box']}", values=(r["lots"], r["qty"]))
+                                text=f"Box {r['box']}", values=(r["types"], r["qty"]))
+        if sel and sel[0] in self.boxlist.get_children(""):
+            self.boxlist.selection_set(sel[0])
+
+    def sort_boxes(self, key):
+        asc = not self.box_sort_state.get(key, False)
+        self.box_sort_state = {key: asc}
+
+        def sk(r):
+            if key == "box":
+                try:
+                    return (0, int(r["box"]), "")
+                except (ValueError, TypeError):
+                    return (1, 0, str(r["box"]))
+            v = r.get(key)
+            return (0, v, "") if v is not None else (1, 0, "")
+
+        self.box_rows.sort(key=sk, reverse=not asc)
+        self.populate_boxes()
 
     def current_box(self):
         sel = self.boxlist.selection()
@@ -308,9 +418,9 @@ class App(ttk.Frame):
             s = f"%{self.v_function.get().strip().lower()}%"
             where.append("(LOWER(t.function) LIKE ? OR LOWER(t.typical_use) LIKE ?)")
             args += [s, s]
-        if self.v_maker.get().strip():
-            where.append("LOWER(s.manufacturer) LIKE ?")
-            args.append(f"%{self.v_maker.get().strip().lower()}%")
+        if self.v_base.get().strip():
+            where.append("LOWER(t.base) LIKE ?")
+            args.append(f"%{self.v_base.get().strip().lower()}%")
         box = self.current_box()
         if box:
             where.append("s.box = ?")
@@ -327,8 +437,39 @@ class App(ttk.Frame):
                 where.append(f"{field} {op} ?")
                 args.append(val)
 
+        if self.adv.get("maker"):
+            where.append("LOWER(s.manufacturer) LIKE ?")
+            args.append(f"%{self.adv['maker'].lower()}%")
+        if self.adv.get("condition"):
+            where.append("LOWER(s.condition) LIKE ?")
+            args.append(f"%{self.adv['condition'].lower()}%")
+        if self.adv.get("family"):
+            where.append("LOWER(t.family) LIKE ?")
+            args.append(f"%{self.adv['family'].lower()}%")
+        if self.adv.get("equivalents"):
+            where.append("LOWER(t.equivalents) LIKE ?")
+            args.append(f"%{self.adv['equivalents'].lower()}%")
+        for field, key in (("t.heater_a", "heater_a"), ("t.va_max", "va_max"),
+                           ("t.gm", "gm"), ("t.mu", "mu"), ("t.power_out", "power_out")):
+            expr = self.adv.get(key)
+            if expr:
+                parsed = parse_cmp(expr)
+                if not parsed:
+                    self.set_status(f"cannot read '{expr}' - try 6.3 or >20")
+                    return
+                op, val = parsed
+                where.append(f"{field} {op} ?")
+                args.append(val)
+        if self.adv.get("confidence"):
+            where.append("t.confidence = ?")
+            args.append(self.adv["confidence"])
+        if self.adv.get("has_sheet") == "yes":
+            where.append("t.datasheet_path IS NOT NULL")
+        elif self.adv.get("has_sheet") == "no":
+            where.append("t.datasheet_path IS NULL")
+
         sql = f"""SELECT s.id, s.box, COALESCE(t.name, s.type_key) AS type,
-                         s.type_key, s.qty, s.manufacturer, s.condition,
+                         s.type_key, s.qty, s.manufacturer, s.condition, t.base,
                          t.function, t.heater_v, t.heater_a, t.pa_max,
                          t.datasheet_path, t.confidence
                   FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
@@ -336,6 +477,13 @@ class App(ttk.Frame):
                   ORDER BY CAST(s.box AS INTEGER), s.box, type"""
         self.rows = [dict(r) for r in self.con.execute(sql, args)]
         self.populate()
+        self.update_adv_label()
+
+    def update_adv_label(self):
+        n = len(self.adv) + sum(1 for v in (self.v_text, self.v_function, self.v_base,
+                                            self.v_heater, self.v_pa, self.v_freq)
+                                if v.get().strip())
+        self.adv_btn.config(text=f"Advanced ({n})" if n else "Advanced...")
 
     def populate(self):
         self.tree.delete(*self.tree.get_children())
@@ -378,6 +526,20 @@ class App(ttk.Frame):
         self.populate()
 
     def on_box_select(self, _e):
+        self.run_search()
+
+    def do_advanced_search(self):
+        quick = {"text": self.v_text, "function": self.v_function, "base": self.v_base,
+                 "heater_v": self.v_heater, "pa_max": self.v_pa, "freq_max": self.v_freq}
+        fields = [(key, label, quick[key].get() if key in quick else self.adv.get(key, ""), kind)
+                  for key, label, kind in ADV_FIELDS]
+        d = FormDialog(self.master, "Advanced search - all fields", fields, ok_label="Apply")
+        if d.result is None:
+            return
+        for key, var in quick.items():
+            var.set(d.result.get(key) or "")
+        self.adv = {k: v for k, v in d.result.items()
+                    if v is not None and k not in ADV_QUICK_KEYS}
         self.run_search()
 
     def selected_row(self):
@@ -539,25 +701,48 @@ class App(ttk.Frame):
     def do_open_sheet(self):
         r = self.selected_row()
         if not r:
+            self.set_status("select a row first")
             return
-        if not r["datasheet_path"]:
-            self.set_status(f"no local datasheet for {r['type']} - "
-                            f"run Tools > Scan datasheet archive")
+        path = None
+        if r["datasheet_path"]:
+            candidate = os.path.join(self.archive, r["datasheet_path"])
+            if os.path.exists(candidate):
+                path = candidate
+        if path:
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(["open", path], check=False)
+                elif os.name == "nt":
+                    os.startfile(path)  # noqa
+                else:
+                    subprocess.run(["xdg-open", path], check=False)
+                self.set_status(f"opened {r['datasheet_path']}")
+            except Exception as e:
+                self.set_status(f"could not open: {e}")
             return
-        path = os.path.join(self.archive, r["datasheet_path"])
-        if not os.path.exists(path):
-            self.set_status(f"file missing: {path}")
+        # No local copy yet - fall back to an online source rather than
+        # doing nothing, so the button is always useful. The lookup site
+        # wants the bare designation (e.g. 6E6PG), not the punctuated
+        # display name (6E6-PG), which it 500s on.
+        t = self.con.execute("SELECT datasheet_url FROM valve_type WHERE type_key=?",
+                             (r["type_key"],)).fetchone()
+        url = (t["datasheet_url"] if t and t["datasheet_url"] else None) or \
+              f"https://tdsl.duncanamps.com/show.php?des={urllib.parse.quote(r['type_key'])}"
+        webbrowser.open(url)
+        self.set_status(f"no local datasheet for {r['type']} - opened {url}")
+
+    def do_lookup(self, site=None):
+        r = self.selected_row()
+        if not r:
+            self.set_status("select a row first")
             return
-        try:
-            if sys.platform == "darwin":
-                subprocess.run(["open", path], check=False)
-            elif os.name == "nt":
-                os.startfile(path)  # noqa
-            else:
-                subprocess.run(["xdg-open", path], check=False)
-            self.set_status(f"opened {r['datasheet_path']}")
-        except Exception as e:
-            self.set_status(f"could not open: {e}")
+        # Site-scoped web search rather than a guessed deep link - RadioMuseum's
+        # own URL scheme isn't reliable to construct directly, but a search
+        # engine will resolve to the right page (or nothing, if it's not there).
+        q = r["type_key"] + " valve tube" + (f" site:{site}" if site else " datasheet")
+        url = f"https://www.google.com/search?q={urllib.parse.quote(q)}"
+        webbrowser.open(url)
+        self.set_status(f"opened {'RadioMuseum' if site else 'web'} search for {r['type']}")
 
     # ---------------------------------------------------------------- tools
 
@@ -603,6 +788,7 @@ class App(ttk.Frame):
             f"boxes in use      {q('SELECT COUNT(DISTINCT box) FROM stock')}",
             f"datasheets held   {q('SELECT COUNT(*) FROM valve_type WHERE datasheet_path IS NOT NULL')}",
             f"confirmed params  {confirmed}",
+            f"bases/sockets     {q('SELECT COALESCE(SUM(qty),0) FROM socket')}",
             "", "by function:",
         ]
         for r in self.con.execute("""
@@ -672,16 +858,142 @@ class App(ttk.Frame):
         self.master.title(f"Valve inventory - {os.path.basename(path)}")
         self.refresh_boxes()
         self.run_search()
+        self.run_sock_search()
 
     def clear_filters(self):
-        for v in (self.v_text, self.v_function, self.v_maker,
+        for v in (self.v_text, self.v_function, self.v_base,
                   self.v_heater, self.v_pa, self.v_freq):
             v.set("")
+        self.adv = {}
         self.boxlist.selection_set("__all__")
         self.run_search()
 
     def set_status(self, msg):
         self.status.config(text=msg)
+
+    # ---------------------------------------------------------------- bases/sockets
+
+    def run_sock_search(self, *_):
+        where, args = ["1=1"], []
+        if self.sv_base.get().strip():
+            where.append("LOWER(base) LIKE ?")
+            args.append(f"%{self.sv_base.get().strip().lower()}%")
+        if self.sv_box.get().strip():
+            where.append("box = ? COLLATE NOCASE")
+            args.append(self.sv_box.get().strip())
+        sql = f"""SELECT id, box, base, qty, condition, notes FROM socket
+                  WHERE {' AND '.join(where)} ORDER BY base, CAST(box AS INTEGER), box"""
+        self.sock_rows = [dict(r) for r in self.con.execute(sql, args)]
+        self.populate_sock()
+
+    def populate_sock(self):
+        self.sock_tree.delete(*self.sock_tree.get_children())
+        for r in self.sock_rows:
+            vals = ["" if r.get(k) is None else r.get(k) for k, _l, _w in SOCKET_COLS]
+            self.sock_tree.insert("", "end", iid=str(r["id"]), values=vals)
+        total = sum(r["qty"] for r in self.sock_rows)
+        self.sock_status.config(text=f"{len(self.sock_rows)} lots, {total} bases/sockets")
+
+    def sort_sock(self, key):
+        asc = not self.sock_sort_state.get(key, False)
+        self.sock_sort_state = {key: asc}
+
+        def sk(r):
+            v = r.get(key)
+            if key == "box":
+                try:
+                    return (0, int(r["box"]), "")
+                except (ValueError, TypeError):
+                    return (1, 0, str(r["box"]))
+            if v is None:
+                return (1, 0, "")
+            if isinstance(v, (int, float)):
+                return (0, v, "")
+            return (0, 0, str(v).lower())
+
+        self.sock_rows.sort(key=sk, reverse=not asc)
+        self.populate_sock()
+
+    def selected_sock(self):
+        sel = self.sock_tree.selection()
+        if not sel:
+            return None
+        return next((r for r in self.sock_rows if str(r["id"]) == sel[0]), None)
+
+    def clear_sock_filters(self):
+        self.sv_base.set("")
+        self.sv_box.set("")
+        self.run_sock_search()
+
+    def do_sock_add(self):
+        boxes = [str(r["box"]) for r in self.con.execute(
+            "SELECT DISTINCT box FROM stock ORDER BY CAST(box AS INTEGER)")]
+        d = FormDialog(self.master, "Add base/socket stock", [
+            ("base", "Base (e.g. B9A, Octal)", "", str),
+            ("box", "Box", self.sv_box.get() or "", boxes),
+            ("qty", "Quantity", 1, int),
+            ("condition", "Condition", "", ["NOS", "used", "untested"]),
+            ("notes", "Notes", "", str),
+        ], ok_label="Add")
+        if not d.result or not d.result["base"] or not d.result["box"]:
+            return
+        r = d.result
+        self.con.execute("INSERT INTO socket (base,box,qty,condition,notes) VALUES (?,?,?,?,?)",
+                         (r["base"].strip(), r["box"], r["qty"] or 1, r["condition"], r["notes"]))
+        self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
+                         (r["box"], "attic"))
+        self.con.commit()
+        self.run_sock_search()
+        self.sock_status.config(text=f"added {r['qty']} x {r['base']} to box {r['box']}")
+
+    def do_sock_take(self):
+        r = self.selected_sock()
+        if not r:
+            self.sock_status.config(text="select a lot first")
+            return
+        d = FormDialog(self.master, f"Take {r['base']} from box {r['box']}",
+                       [("qty", f"How many (have {r['qty']})", 1, int)], ok_label="Take")
+        if not d.result:
+            return
+        n = d.result["qty"] or 0
+        if n <= 0:
+            return
+        if n >= r["qty"]:
+            self.con.execute("DELETE FROM socket WHERE id=?", (r["id"],))
+        else:
+            self.con.execute("UPDATE socket SET qty=qty-? WHERE id=?", (n, r["id"]))
+        self.con.commit()
+        self.run_sock_search()
+        self.sock_status.config(text=f"took {min(n, r['qty'])} x {r['base']} from box {r['box']}")
+
+    def do_sock_move(self):
+        r = self.selected_sock()
+        if not r:
+            self.sock_status.config(text="select a lot first")
+            return
+        boxes = [str(x["box"]) for x in self.con.execute(
+            "SELECT DISTINCT box FROM stock ORDER BY CAST(box AS INTEGER)")]
+        d = FormDialog(self.master, f"Move {r['base']}",
+                       [("to", "To box", "", boxes)], ok_label="Move")
+        if not d.result or not d.result["to"]:
+            return
+        self.con.execute("UPDATE socket SET box=? WHERE id=?", (d.result["to"], r["id"]))
+        self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
+                         (d.result["to"], "attic"))
+        self.con.commit()
+        self.run_sock_search()
+        self.sock_status.config(text=f"moved {r['base']} to box {d.result['to']}")
+
+    def do_sock_delete(self):
+        r = self.selected_sock()
+        if not r:
+            return
+        if not messagebox.askyesno("Delete lot",
+                                   f"Remove all {r['qty']} x {r['base']} from box {r['box']}?"):
+            return
+        self.con.execute("DELETE FROM socket WHERE id=?", (r["id"],))
+        self.con.commit()
+        self.run_sock_search()
 
 
 def main():

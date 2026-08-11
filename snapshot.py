@@ -29,11 +29,12 @@ TYPE_COLS = ["type_key", "name", "function", "family", "base", "pins",
              "datasheet_path", "datasheet_url", "confidence", "notes"]
 STOCK_COLS = ["id", "type_key", "box", "qty", "manufacturer", "condition",
               "date_added", "notes"]
+SOCKET_COLS = ["id", "base", "box", "qty", "condition", "notes"]
 
 
 def write_csv(con, path, table, cols, strip=()):
     rows = con.execute(f"SELECT {','.join(cols)} FROM {table} ORDER BY {cols[0]}")
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, lineterminator="\n")
         w.writerow(cols)
         for r in rows:
@@ -53,9 +54,10 @@ def snapshot(args):
               ("notes",) if args.strip_notes else ())
     write_csv(con, f"{DATA}/sundry.csv", "sundry",
               ["id", "box", "description", "qty", "notes"])
+    write_csv(con, f"{DATA}/sockets.csv", "socket", SOCKET_COLS)
 
     # Full SQL dump, so a clone can rebuild the database exactly.
-    with open(f"{DATA}/valves.sql", "w") as f:
+    with open(f"{DATA}/valves.sql", "w", encoding="utf-8") as f:
         for line in con.iterdump():
             f.write(line + "\n")
 
@@ -77,7 +79,7 @@ def restore(args):
     # alphabetically, so stock rows arrive before valve_type exists.
     con = sqlite3.connect(args.db)
     con.execute("PRAGMA foreign_keys = OFF")
-    with open(f"{DATA}/valves.sql") as f:
+    with open(f"{DATA}/valves.sql", encoding="utf-8") as f:
         con.executescript(f.read())
     con.commit()
     bad = con.execute("PRAGMA foreign_key_check").fetchall()
