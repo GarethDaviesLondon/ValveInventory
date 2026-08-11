@@ -1,0 +1,9 @@
+# Binary files - never let git's CRLF normalization touch these, or they'll
+# be corrupted. git's own binary auto-detection isn't reliable enough to
+# depend on for files that matter (seen it miss these PDFs), so be explicit.
+*.pdf -text binary
+*.xlsx -text binary
+*.db -text binary
+*.png -text binary
+*.jpg -text binary
+*.gif -text binary

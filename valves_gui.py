@@ -23,7 +23,7 @@ import valvelib as V
 PAD = 8
 
 STOCK_COLS = [
-    ("box", "Box", 50), ("type", "Type", 100), ("qty", "Qty", 42),
+    ("box", "Box", 50), ("type", "Type", 100), ("match", "Match", 90), ("qty", "Qty", 42),
     ("manufacturer", "Maker", 88), ("condition", "Condition", 92),
     ("base", "Base", 64), ("function", "Function", 190), ("heater_v", "Htr V", 48),
     ("heater_a", "Htr A", 48), ("pa_max", "Pa W", 46), ("sheet", "Sheet", 44),
@@ -53,6 +53,85 @@ SOCKET_COLS = [
     ("condition", "Condition", 110), ("notes", "Notes", 260),
 ]
 
+# Parametric Browser tab: plain dropdown (equality) for categorical fields,
+# operator+value dropdown for numeric ones. Both kinds of dropdown cascade -
+# their option lists are recomputed from what the *other* active filters
+# still allow, like a faceted product filter.
+#
+# "category" and "variable_mu" aren't real columns - the raw `function` text
+# is specific enough that almost every type gets its own value ("triode
+# pentode (video output)" vs "triode-pentode (audio driver plus output)"),
+# which makes it useless as a browse facet. These are derived, coarser
+# buckets computed per row instead - see browse_category()/is_variable_mu().
+PB_CAT_FIELDS = [("category", "Category"), ("base", "Base"), ("family", "Family"),
+                  ("confidence", "Confidence"), ("variable_mu", "Variable-mu")]
+PB_NUM_FIELDS = [("heater_v", "Heater V"), ("heater_a", "Heater A"), ("va_max", "Va max"),
+                  ("pa_max", "Pa max"), ("gm", "gm"), ("mu", "mu"),
+                  ("power_out", "Power out"), ("freq_max", "Freq max")]
+PB_OPS = ["", "=", ">", "<", ">=", "<="]
+
+BROWSE_COLS = [
+    ("name", "Type", 90), ("category", "Category", 110), ("function", "Function", 170),
+    ("base", "Base", 90), ("heater_v", "Htr V", 48), ("heater_a", "Htr A", 48),
+    ("va_max", "Va", 55), ("pa_max", "Pa", 50), ("power_out", "P.out", 55),
+    ("freq_max", "Freq", 55), ("qty", "Qty held", 60),
+]
+
+# Checked in order - compound/combination types must come before the plain
+# categories they'd otherwise also match as a substring (e.g. "triode-pentode"
+# has to be tested before "triode" and before "pentode").
+BROWSE_CATEGORIES = [
+    ("triode-pentode", ["triode-pentode", "triode pentode", "triode + pentode"]),
+    ("triode-heptode", ["triode-heptode", "triode heptode"]),
+    ("triode-hexode", ["triode-hexode", "triode hexode"]),
+    ("diode-triode", ["diode triode", "diode-triode"]),
+    ("diode-pentode", ["diode-pentode", "diode pentode", "diode-tetrode"]),
+    ("double diode", ["double diode"]),
+    ("double triode", ["double triode", "twin triode", "dual triode"]),
+    ("beam tetrode", ["beam tetrode", "beam power"]),
+    ("tetrode", ["tetrode"]),
+    ("pentode", ["pentode"]),
+    ("triode", ["triode"]),
+    ("rectifier", ["rectifier", "efficiency diode", "booster diode", "switching diode"]),
+    ("diode", ["diode"]),
+    ("frequency changer", ["heptode", "hexode", "octode", "frequency changer"]),
+    ("stabiliser", ["stabiliser", "stabilizer", "voltage reference"]),
+    ("indicator", ["tuning indicator", "magic eye", "nixie", "vfd", "vacuum fluorescent"]),
+    ("microwave/klystron", ["klystron", "microwave", "planar triode"]),
+    ("CRT", ["cathode ray tube"]),
+]
+
+VARIABLE_MU_HINTS = ("variable-mu", "variable mu", "remote cutoff", "remote-cutoff", "vari-mu")
+
+
+def browse_category(text):
+    if not text:
+        return None
+    t = text.lower()
+    for label, keywords in BROWSE_CATEGORIES:
+        if any(kw in t for kw in keywords):
+            return label
+    return "other"
+
+
+def is_variable_mu(row):
+    text = f"{row.get('function') or ''} {row.get('typical_use') or ''}".lower()
+    return any(k in text for k in VARIABLE_MU_HINTS)
+
+
+def compare_op(a, op, b):
+    if op == "=":
+        return a == b
+    if op == ">":
+        return a > b
+    if op == "<":
+        return a < b
+    if op == ">=":
+        return a >= b
+    if op == "<=":
+        return a <= b
+    return True
+
 TYPE_FIELDS = [
     ("function", "Function", str), ("base", "Base", str), ("pins", "Pins", int),
     ("heater_v", "Heater V", float), ("heater_a", "Heater A", float),
@@ -61,6 +140,23 @@ TYPE_FIELDS = [
     ("power_out", "Power out W", float), ("freq_max", "Freq max MHz", float),
     ("equivalents", "Equivalents", str), ("typical_use", "Typical use", str),
 ]
+
+
+# Fields compared when looking for a substitute with a similar electrical
+# profile - heater is deliberately excluded (any heater might do, with a
+# dropping resistor or different supply) but checked separately for a flag.
+SIMILAR_FIELDS = ("va_max", "pa_max", "gm", "mu", "power_out", "freq_max")
+SIMILAR_TOLERANCE = 0.5
+
+
+def function_group(text):
+    if not text:
+        return None
+    t = text.lower()
+    for label, keywords in V.FUNCTION_GROUPS:
+        if any(kw in t for kw in keywords):
+            return label
+    return None
 
 
 def parse_cmp(expr):
@@ -134,12 +230,12 @@ class FormDialog(tk.Toplevel):
 
 
 class TextWindow(tk.Toplevel):
-    def __init__(self, parent, title, body):
+    def __init__(self, parent, title, body, wrap="none", proportional=False):
         super().__init__(parent)
         self.title(title)
         self.geometry("640x540")
         self.transient(parent)
-        txt = tk.Text(self, wrap="none", font="TkFixedFont",
+        txt = tk.Text(self, wrap=wrap, font="TkDefaultFont" if proportional else "TkFixedFont",
                       borderwidth=0, padx=PAD, pady=PAD)
         sb = ttk.Scrollbar(self, orient="vertical", command=txt.yview)
         txt.configure(yscrollcommand=sb.set)
@@ -149,6 +245,87 @@ class TextWindow(tk.Toplevel):
         txt.configure(state="disabled")
         self.update_idletasks()
         self.geometry(f"+{parent.winfo_rootx() + 90}+{parent.winfo_rooty() + 60}")
+
+
+# Reference fields shown in TypeDetailWindow's info block, in display order.
+DETAIL_FIELDS = [
+    ("function", "Function", ""), ("base", "Base", ""), ("pins", "Pins", ""),
+    ("heater_v", "Heater V", " V"), ("heater_a", "Heater A", " A"),
+    ("va_max", "Va max", " V"), ("pa_max", "Pa max", " W"), ("gm", "gm", " mA/V"),
+    ("mu", "mu", ""), ("power_out", "Power out", " W"), ("freq_max", "Freq max", " MHz"),
+]
+
+
+class TypeDetailWindow(tk.Toplevel):
+    """Box-breakdown popup (Browse tab, double-click a type) - shown alongside
+    the type's reference data and the same datasheet/web lookups the Valves
+    tab detail panel offers, since a browse result raises the same "what is
+    this and where do I read more" question a search result does."""
+
+    def __init__(self, app, t, box_rows):
+        super().__init__(app.master)
+        self.app = app
+        self.row = dict(t)
+        self.row["type"] = self.row["name"]
+        self.title(f"{t['name']} - reference & stock")
+        self.geometry("560x560")
+        self.transient(app.master)
+
+        top = ttk.Frame(self, padding=(PAD, PAD, PAD, 0))
+        top.pack(fill="x")
+        ttk.Label(top, text=t["name"], font=("TkDefaultFont", 14, "bold")).pack(side="left")
+        ttk.Label(top, text=f"  [{t['confidence']}]", foreground="#666").pack(side="left")
+        ttk.Button(top, text="Web search", command=lambda: self._lookup()).pack(side="right")
+        ttk.Button(top, text="RadioMuseum",
+                  command=lambda: self._lookup("radiomuseum.org")).pack(side="right", padx=(0, 6))
+        ttk.Button(top, text="Open datasheet", command=self._open_sheet).pack(side="right", padx=(0, 6))
+
+        info = tk.Text(self, height=11, wrap="word", font=("TkDefaultFont", 9),
+                       padx=PAD, pady=6, borderwidth=0, background=self.cget("background"))
+        info.pack(fill="x", padx=PAD, pady=(PAD, 0))
+        lines = []
+        for key, label, unit in DETAIL_FIELDS:
+            if t[key] is not None:
+                lines.append(f"{label:<12} {t[key]}{unit}")
+        if t["equivalents"]:
+            lines.append(f"{'Equivalents':<12} {t['equivalents']}")
+        if t["typical_use"]:
+            lines += ["", t["typical_use"]]
+        if t["notes"]:
+            lines += ["", f"Notes: {t['notes'][:600]}"]
+        if not lines:
+            lines = ["No reference data yet."]
+        info.insert("1.0", "\n".join(lines))
+        info.configure(state="disabled")
+
+        total = sum(r["qty"] for r in box_rows)
+        ttk.Label(self, text=f"Box breakdown - {total} held across {len(box_rows)} box(es)",
+                 foreground="#666").pack(anchor="w", padx=PAD, pady=(PAD, 2))
+        mid = ttk.Frame(self)
+        mid.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
+        tree = ttk.Treeview(mid, columns=("box", "qty", "maker", "condition"),
+                            show="headings", height=8)
+        for key, label, width in (("box", "Box", 60), ("qty", "Qty", 50),
+                                  ("maker", "Maker", 140), ("condition", "Condition", 120)):
+            tree.heading(key, text=label)
+            tree.column(key, width=width, anchor="e" if key == "qty" else "w")
+        vs = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vs.set)
+        tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="left", fill="y")
+        for r in box_rows:
+            tree.insert("", "end", values=(r["box"], r["qty"], r["manufacturer"] or "",
+                                           r["condition"] or ""))
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        self.geometry(f"+{app.master.winfo_rootx() + 100}+{app.master.winfo_rooty() + 80}")
+
+    def _open_sheet(self):
+        self.app.do_open_sheet(self.row)
+
+    def _lookup(self, site=None):
+        self.app.do_lookup(site, self.row)
 
 
 # --------------------------------------------------------------------------
@@ -180,13 +357,17 @@ class App(ttk.Frame):
         self.nb.pack(fill="both", expand=True)
         valves_tab = ttk.Frame(self.nb, padding=PAD)
         bases_tab = ttk.Frame(self.nb, padding=PAD)
+        browse_tab = ttk.Frame(self.nb, padding=PAD)
         self.nb.add(valves_tab, text="Valves")
         self.nb.add(bases_tab, text="Bases / Sockets")
+        self.nb.add(browse_tab, text="Browse")
         self._build_valves_tab(valves_tab)
         self._build_bases_tab(bases_tab)
+        self._build_browse_tab(browse_tab)
         self.refresh_boxes()
         self.run_search()
         self.run_sock_search()
+        self.pb_run_search()
 
     # ---------------------------------------------------------------- chrome
 
@@ -194,6 +375,7 @@ class App(ttk.Frame):
         m = tk.Menu(self.master)
         f = tk.Menu(m, tearoff=0)
         f.add_command(label="Export spreadsheet...", command=self.do_export)
+        f.add_command(label="Export archive and tools (.zip)...", command=self.do_export_archive)
         f.add_command(label="Open database...", command=self.do_open_db)
         f.add_separator()
         f.add_command(label="Quit", command=self.master.destroy)
@@ -206,7 +388,30 @@ class App(ttk.Frame):
         t.add_separator()
         t.add_command(label="Scan datasheet archive", command=self.do_scan)
         t.add_command(label="Set archive folder...", command=self.do_set_archive)
+        t.add_separator()
+        t.add_command(label="Create upload template...", command=self.do_create_upload_template)
+        t.add_command(label="Import upload CSV...", command=self.do_import_csv)
+        t.add_command(label="Generate CSV-building prompt...", command=self.do_generate_csv_prompt)
+        t.add_separator()
+        t.add_command(label="Generate research prompt...", command=self.do_generate_prompt)
+        t.add_command(label="Generate datasheet download prompt...",
+                      command=self.do_generate_download_prompt)
+        t.add_command(label="Apply researched data...", command=self.do_apply_research)
         m.add_cascade(label="Tools", menu=t)
+
+        h = tk.Menu(m, tearoff=0)
+        h.add_command(label="User guide", command=self.do_help_guide)
+        h.add_separator()
+        h.add_command(label="Installation manual (PDF)",
+                      command=lambda: self.do_open_manual("INSTALLATION_MANUAL.pdf"))
+        h.add_command(label="User manual (PDF)",
+                      command=lambda: self.do_open_manual("USER_MANUAL.pdf"))
+        h.add_command(label="Technical manual (PDF)",
+                      command=lambda: self.do_open_manual("TECHNICAL_MANUAL.pdf"))
+        h.add_separator()
+        h.add_command(label="About", command=self.do_about)
+        m.add_cascade(label="Help", menu=h)
+
         self.master.config(menu=m)
 
     def _build_valves_tab(self, root):
@@ -283,6 +488,7 @@ class App(ttk.Frame):
         self.tree.bind("<<TreeviewSelect>>", self.on_row_select)
         self.tree.bind("<Double-1>", lambda e: self.do_open_sheet())
         self.tree.tag_configure("inferred", foreground="#8a6d00")
+        self.tree.tag_configure("equiv", foreground="#0a5a8a")
         panes.add(mid, weight=3)
 
         # detail
@@ -316,9 +522,20 @@ class App(ttk.Frame):
                    command=lambda: self.save_type(True)).pack(side="left", padx=(6, 0))
 
         ttk.Label(right, text="Notes", foreground="#666").pack(anchor="w", pady=(PAD, 2))
-        self.notes = tk.Text(right, height=5, wrap="word", width=32,
+        self.notes = tk.Text(right, height=3, wrap="word", width=32,
                              font=("TkDefaultFont", 9))
-        self.notes.pack(fill="both", expand=True)
+        self.notes.pack(fill="x")
+
+        ttk.Label(right, text="Similar types (may substitute, with modification)",
+                 foreground="#666").pack(anchor="w", pady=(PAD, 2))
+        self.suggest_tree = ttk.Treeview(right, columns=("info",), show="tree headings", height=6)
+        self.suggest_tree.heading("#0", text="Type")
+        self.suggest_tree.heading("info", text="Why")
+        self.suggest_tree.column("#0", width=64, stretch=False)
+        self.suggest_tree.column("info", width=230)
+        self.suggest_tree.pack(fill="both", expand=True, pady=(0, 4))
+        self.suggest_tree.bind("<Double-1>", lambda e: self.on_suggest_pick())
+        self.suggest_tree.tag_configure("heater_diff", foreground="#8a3d00")
         panes.add(right, weight=1)
 
         # ---- status bar ----
@@ -365,6 +582,76 @@ class App(ttk.Frame):
 
         self.sock_status = ttk.Label(root, text="", anchor="w", foreground="#444")
         self.sock_status.pack(fill="x", pady=(PAD, 0))
+
+    def _build_browse_tab(self, root):
+        filt = ttk.LabelFrame(root, text="Filters (cascading - options narrow as you pick)", padding=PAD)
+        filt.pack(fill="x", pady=(0, PAD))
+
+        top = ttk.Frame(filt)
+        top.pack(fill="x", pady=(0, 6))
+        ttk.Label(top, text="Name contains").pack(side="left")
+        self.pb_name = tk.StringVar()
+        e = ttk.Entry(top, textvariable=self.pb_name, width=20)
+        e.pack(side="left", padx=(4, PAD * 2))
+        e.bind("<KeyRelease>", lambda ev: self.pb_run_search())
+        ttk.Button(top, text="Clear all filters", command=self.pb_clear).pack(side="left")
+
+        grid = ttk.Frame(filt)
+        grid.pack(fill="x")
+        self.pb_cat_vars = {}
+        self.pb_cat_combos = {}
+        col = 0
+        for field, label in PB_CAT_FIELDS:
+            ttk.Label(grid, text=label).grid(row=0, column=col, sticky="e", padx=(0 if col == 0 else PAD, 4), pady=2)
+            var = tk.StringVar()
+            var.trace_add("write", lambda *_a: self.pb_run_search())
+            cb = ttk.Combobox(grid, textvariable=var, width=16, state="readonly")
+            cb.grid(row=0, column=col + 1, sticky="w", pady=2)
+            self.pb_cat_vars[field] = var
+            self.pb_cat_combos[field] = cb
+            col += 2
+
+        self.pb_num_op = {}
+        self.pb_num_val = {}
+        self.pb_num_combos = {}
+        for i, (field, label) in enumerate(PB_NUM_FIELDS):
+            r, c = 1 + i // 4, (i % 4) * 3
+            ttk.Label(grid, text=label).grid(row=r, column=c, sticky="e", padx=(0 if c == 0 else PAD, 4), pady=2)
+            opvar = tk.StringVar()
+            opvar.trace_add("write", lambda *_a: self.pb_run_search())
+            opbox = ttk.Combobox(grid, textvariable=opvar, values=PB_OPS, width=3, state="readonly")
+            opbox.grid(row=r, column=c + 1, sticky="w")
+            valvar = tk.StringVar()
+            valvar.trace_add("write", lambda *_a: self.pb_run_search())
+            valbox = ttk.Combobox(grid, textvariable=valvar, width=10, state="readonly")
+            valbox.grid(row=r, column=c + 2, sticky="w", padx=(2, 0), pady=2)
+            self.pb_num_op[field] = opvar
+            self.pb_num_val[field] = valvar
+            self.pb_num_combos[field] = valbox
+
+        mid = ttk.Frame(root)
+        mid.pack(fill="both", expand=True)
+        self.pb_tree = ttk.Treeview(mid, columns=[c[0] for c in BROWSE_COLS],
+                                    show="headings", selectmode="browse", height=16)
+        for key, label, width in BROWSE_COLS:
+            self.pb_tree.heading(key, text=label, command=lambda k=key: self.pb_sort(k))
+            self.pb_tree.column(key, width=width, minwidth=40, stretch=(key == "function"),
+                                anchor="e" if key in ("heater_v", "heater_a", "va_max", "pa_max",
+                                                       "power_out", "freq_max", "qty") else "w")
+        vs = ttk.Scrollbar(mid, orient="vertical", command=self.pb_tree.yview)
+        self.pb_tree.configure(yscrollcommand=vs.set)
+        self.pb_tree.grid(row=0, column=0, sticky="nsew")
+        vs.grid(row=0, column=1, sticky="ns")
+        mid.rowconfigure(0, weight=1)
+        mid.columnconfigure(0, weight=1)
+        self.pb_tree.bind("<Double-1>", lambda e: self.pb_show_boxes())
+        self.pb_tree.tag_configure("inferred", foreground="#8a6d00")
+
+        self.pb_status = ttk.Label(root, text="", anchor="w", foreground="#444")
+        self.pb_status.pack(fill="x", pady=(PAD, 0))
+        self.pb_sort_state = {}
+        self.pb_rows = []
+        self.pb_all = []
 
     # ---------------------------------------------------------------- data
 
@@ -476,8 +763,51 @@ class App(ttk.Frame):
                   WHERE {' AND '.join(where)}
                   ORDER BY CAST(s.box AS INTEGER), s.box, type"""
         self.rows = [dict(r) for r in self.con.execute(sql, args)]
+        for r in self.rows:
+            r["match"] = ""
+        self.add_equivalent_rows()
         self.populate()
         self.update_adv_label()
+
+    def add_equivalent_rows(self):
+        """If the text search names an exact type, also pull in stock of its
+        equivalents (either direction) so a substitute isn't missed just
+        because it's filed under a different designation."""
+        text = self.v_text.get().strip()
+        if not text:
+            return
+        seed_key = V.norm(text)
+        seed = self.con.execute("SELECT type_key, name, equivalents FROM valve_type WHERE type_key=?",
+                                (seed_key,)).fetchone()
+        if not seed:
+            return
+        expand = {}  # type_key -> label describing why it's included
+        for tok in (seed["equivalents"] or "").split():
+            k = V.norm(tok)
+            if k and k != seed_key:
+                expand[k] = seed["name"]
+        for row in self.con.execute("SELECT type_key, name, equivalents FROM valve_type WHERE equivalents IS NOT NULL"):
+            if row["type_key"] == seed_key:
+                continue
+            if any(V.norm(tok) == seed_key for tok in (row["equivalents"] or "").split()):
+                expand[row["type_key"]] = row["name"]
+        if not expand:
+            return
+        have_ids = {r["id"] for r in self.rows}
+        qmarks = ",".join("?" * len(expand))
+        sql = f"""SELECT s.id, s.box, COALESCE(t.name, s.type_key) AS type,
+                         s.type_key, s.qty, s.manufacturer, s.condition, t.base,
+                         t.function, t.heater_v, t.heater_a, t.pa_max,
+                         t.datasheet_path, t.confidence
+                  FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
+                  WHERE s.type_key IN ({qmarks})
+                  ORDER BY CAST(s.box AS INTEGER), s.box, type"""
+        for r in self.con.execute(sql, list(expand.keys())):
+            r = dict(r)
+            if r["id"] in have_ids:
+                continue
+            r["match"] = f"≈ equiv of {expand[r['type_key']]}"
+            self.rows.append(r)
 
     def update_adv_label(self):
         n = len(self.adv) + sum(1 for v in (self.v_text, self.v_function, self.v_base,
@@ -495,11 +825,17 @@ class App(ttk.Frame):
                 else:
                     v = r.get(key)
                     vals.append("" if v is None else v)
-            tag = "inferred" if r["confidence"] == "inferred" else ""
-            self.tree.insert("", "end", iid=str(r["id"]), values=vals, tags=(tag,))
+            tags = []
+            if r.get("match"):
+                tags.append("equiv")
+            elif r["confidence"] == "inferred":
+                tags.append("inferred")
+            self.tree.insert("", "end", iid=str(r["id"]), values=vals, tags=tuple(tags))
         total = sum(r["qty"] for r in self.rows)
-        self.set_status(f"{len(self.rows)} lots, {total} valves"
-                        f"   -   amber rows have unconfirmed parameters")
+        note = "   -   amber = unconfirmed params"
+        if any(r.get("match") for r in self.rows):
+            note += ", blue = equivalent of your search"
+        self.set_status(f"{len(self.rows)} lots, {total} valves{note}")
         kids = self.tree.get_children()
         if kids:
             self.tree.selection_set(kids[0])
@@ -574,6 +910,56 @@ class App(ttk.Frame):
             self.field_vars[k].set("" if v is None else str(v))
         self.notes.delete("1.0", "end")
         self.notes.insert("1.0", t["notes"] or "")
+        self.populate_suggestions(t)
+
+    def find_similar(self, ref, limit=8):
+        """Other held types with the same broad function and every shared
+        electrical parameter within SIMILAR_TOLERANCE - candidates for a
+        substitute-with-modification, not a drop-in equivalent."""
+        ref_group = function_group(ref["function"])
+        if not ref_group:
+            return []
+        equiv_keys = {V.norm(x) for x in (ref["equivalents"] or "").split()}
+        out = []
+        for row in self.con.execute("SELECT * FROM valve_type WHERE type_key != ?", (ref["type_key"],)):
+            if row["type_key"] in equiv_keys or function_group(row["function"]) != ref_group:
+                continue
+            deltas, ok = [], True
+            for f in SIMILAR_FIELDS:
+                rv, cv = ref[f], row[f]
+                if rv is None or cv is None or rv == 0:
+                    continue
+                pct = abs(cv - rv) / rv
+                if pct > SIMILAR_TOLERANCE:
+                    ok = False
+                    break
+                deltas.append((f, pct))
+            if not ok or not deltas:
+                continue
+            heater_diff = (ref["heater_v"] is not None and row["heater_v"] is not None
+                           and abs(ref["heater_v"] - row["heater_v"]) > 0.3)
+            avg_pct = sum(p for _f, p in deltas) / len(deltas)
+            out.append((avg_pct, row, deltas, heater_diff))
+        out.sort(key=lambda x: x[0])
+        return out[:limit]
+
+    def populate_suggestions(self, ref):
+        self.suggest_tree.delete(*self.suggest_tree.get_children())
+        self._suggestions = {}
+        for _avg, row, deltas, heater_diff in self.find_similar(ref):
+            bits = [f"{f.replace('_max','')} {row[f]:g} ({p*100:.0f}% off)" for f, p in deltas[:2]]
+            info = ", ".join(bits)
+            if heater_diff:
+                info += f"  [heater {row['heater_v']}V vs {ref['heater_v']}V]"
+            iid = row["type_key"]
+            self._suggestions[iid] = row["type_key"]
+            self.suggest_tree.insert("", "end", iid=iid, text=row["name"], values=(info,),
+                                     tags=("heater_diff",) if heater_diff else ())
+
+    def on_suggest_pick(self):
+        sel = self.suggest_tree.selection()
+        if sel:
+            self.load_type(sel[0])
 
     def save_type(self, confirm):
         if not self.current_type:
@@ -698,8 +1084,8 @@ class App(ttk.Frame):
         self.refresh_boxes()
         self.run_search()
 
-    def do_open_sheet(self):
-        r = self.selected_row()
+    def do_open_sheet(self, row=None):
+        r = row if row is not None else self.selected_row()
         if not r:
             self.set_status("select a row first")
             return
@@ -731,8 +1117,8 @@ class App(ttk.Frame):
         webbrowser.open(url)
         self.set_status(f"no local datasheet for {r['type']} - opened {url}")
 
-    def do_lookup(self, site=None):
-        r = self.selected_row()
+    def do_lookup(self, site=None, row=None):
+        r = row if row is not None else self.selected_row()
         if not r:
             self.set_status("select a row first")
             return
@@ -834,6 +1220,110 @@ class App(ttk.Frame):
         body += [f"  {a:<12} {b}" for a, b in pairs]
         TextWindow(self.master, "Possible duplicate types", "\n".join(body))
 
+    def do_help_guide(self):
+        body = "\n".join([
+            "VALVE INVENTORY - USER GUIDE", "",
+            "Two front ends sharing one database: this window, and valves.py on the command "
+            "line. Three tabs here - Valves, Bases / Sockets, Browse.",
+            "",
+            "ADDING STOCK", "",
+            "  One at a time    \"Add stock\" (Valves tab) / \"Add\" (Bases-Sockets tab). "
+            "Creates the type automatically if it's new, classifying it from its designation.",
+            "  In bulk          Tools > Import upload CSV..., using the column layout from "
+            "Tools > Create upload template... (writes a blank CSV ready to fill in).",
+            "  From messy data  Tools > Generate CSV-building prompt... writes a prompt for "
+            "any Claude chat. It interviews you (or reads whatever spreadsheet, notes, or "
+            "photos you describe) and hands back a ready-to-import CSV.",
+            "",
+            "REMOVING / MOVING STOCK", "",
+            "  Select a row, then Take (use up some of a lot), Move (to another box), or "
+            "Delete lot (removes it - asks first). Same from the command line: "
+            "valves.py take/move TYPE ...",
+            "",
+            "SEARCHING & BROWSING", "",
+            "  Valves tab search row - text, function, base, and the numeric fields (accept "
+            "'>20', '<7', '>=250'). Searching a type also pulls in anything cross-referenced "
+            "as its equivalent, shown in blue and labelled which type it's equivalent to. "
+            "Advanced... opens every remaining field.",
+            "  Browse tab - dropdown filters that cascade (Category, Base, Family, "
+            "Confidence, Variable-mu - picking one narrows what the others offer), plus "
+            "<, =, > on every numeric rating, and a live name filter as you type. "
+            "Double-click a type for its box breakdown, full reference data, and "
+            "datasheet/web-search shortcuts.",
+            "",
+            "FILLING IN REFERENCE DATA", "",
+            "  Parameters start out inferred from the type's naming convention, not read from "
+            "a datasheet - unconfirmed rows show amber in the Valves tab.",
+            "  By hand    Edit the fields in the detail panel, then Save + confirm.",
+            "  With Claude:",
+            "    Tools > Generate research prompt...             electrical parameters",
+            "    Tools > Generate datasheet download prompt...   PDFs into the local archive",
+            "  Paste either into Claude - the research prompt works in any chat; the download "
+            "one needs an agent with file/web access (Claude Code), since it writes files to "
+            "disk. Save the reply to a text file, then Tools > Apply researched data... (or "
+            "'import_researched.py <file> --yes' from the command line). Only what Claude "
+            "actually confirmed gets applied - a hedged finding ('could not verify', "
+            "'plausible') stays flagged as a lead, not marked confirmed.",
+            "",
+            "DATASHEETS", "",
+            "  Double-click a row, or \"Open datasheet\", opens the local PDF if there is one, "
+            "otherwise falls back to a web lookup (RadioMuseum / Web search do the same, "
+            "scoped to that site). Tools > Scan datasheet archive links newly-added PDF files "
+            "in by filename. fetch_datasheets.py builds the archive itself from "
+            "frank.pocnet.net (see README) - it's gitignored and not included when you "
+            "export, so rebuild it locally or use the download prompt above.",
+            "",
+            "BACKUP & VERSION CONTROL", "",
+            "  valves.db is the live database - gitignored, since it's binary and can't be "
+            "diffed. snapshot.py writes data/*.csv and valves.sql, a text snapshot that IS "
+            "meant to be committed - that's the real backup and history. After cloning or "
+            "restoring elsewhere: 'snapshot.py --restore' rebuilds valves.db from data/.",
+            "",
+            "EXPORT & GIVING THIS TO SOMEONE ELSE", "",
+            "  File > Export spreadsheet...  a plain .xlsx for anyone who just wants to look, "
+            "not use the tool.",
+            "  File > Export archive and tools (.zip)...  the whole toolkit (code, docs, a "
+            "fresh data/ snapshot) zipped up, with an option to strip the third-party "
+            "descriptive notes text first. See QUICKSTART.md, included in the zip:",
+            "    1. Unzip, run 'python3 snapshot.py --restore', then 'python3 valves_gui.py'.",
+            "    2. Datasheets aren't included - rebuild with fetch_datasheets.py, or Tools > "
+            "Generate datasheet download prompt... with Claude.",
+            "    3. Add their own stock the same ways described above.",
+            "",
+            "Everything here also works from the command line - see README.md for the full "
+            "command reference.",
+        ])
+        TextWindow(self.master, "User guide", body, wrap="word", proportional=True)
+
+    def do_about(self):
+        messagebox.showinfo(
+            "About",
+            "Valve inventory\n\n"
+            "A SQLite database and desktop/CLI tool for cataloguing a vacuum-tube collection - "
+            "1,441 valves, 253 types, 36 boxes and counting.\n\n"
+            "See README.md for the full picture, or Help > User guide for a task-by-task "
+            "walkthrough.")
+
+    def do_open_manual(self, filename):
+        here = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(here, "docs", filename)
+        if not os.path.exists(path):
+            messagebox.showerror(
+                "Manual not found",
+                f"{filename} isn't in docs/. Regenerate it with:\n"
+                "  python3 docs/build_manuals.py\n(requires: pip install reportlab)")
+            return
+        try:
+            if sys.platform == "darwin":
+                subprocess.run(["open", path], check=False)
+            elif os.name == "nt":
+                os.startfile(path)  # noqa
+            else:
+                subprocess.run(["xdg-open", path], check=False)
+            self.set_status(f"opened {filename}")
+        except Exception as e:
+            self.set_status(f"could not open: {e}")
+
     def do_export(self):
         path = filedialog.asksaveasfilename(
             defaultextension=".xlsx", initialfile="valve_inventory.xlsx",
@@ -859,6 +1349,274 @@ class App(ttk.Frame):
         self.refresh_boxes()
         self.run_search()
         self.run_sock_search()
+
+    def do_export_archive(self):
+        import zipfile
+        path = filedialog.asksaveasfilename(
+            defaultextension=".zip", initialfile="valve_inventory_export.zip",
+            filetypes=[("Zip archive", "*.zip")])
+        if not path:
+            return
+        strip = messagebox.askyesno(
+            "Strip descriptive notes?",
+            "The typical_use/notes fields carry some descriptive text originally gathered from "
+            "r-type.org, which isn't yours to republish freely (see README).\n\n"
+            "Strip it from this export? (Classifications, parameters and box locations are "
+            "unaffected either way.)")
+        here = os.path.dirname(os.path.abspath(__file__))
+        try:
+            import snapshot as snap
+            snap.snapshot(argparse.Namespace(db=self.dbpath, strip_notes=strip))
+        except Exception as e:
+            messagebox.showerror("Export failed", f"could not refresh the snapshot: {e}")
+            return
+        include = ["valves.py", "valves_gui.py", "valvelib.py", "snapshot.py",
+                  "fetch_datasheets.py", "build_db.py", "test_smoke.py",
+                  "import_researched.py", "upload_template.csv",
+                  "README.md", "QUICKSTART.md", "LICENSE"]
+        try:
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for fn in include:
+                    fp = os.path.join(here, fn)
+                    if os.path.exists(fp):
+                        zf.write(fp, arcname=fn)
+                data_dir = os.path.join(here, "data")
+                for fn in sorted(os.listdir(data_dir)):
+                    if fn.endswith((".csv", ".sql")):
+                        zf.write(os.path.join(data_dir, fn), arcname=f"data/{fn}")
+                docs_dir = os.path.join(here, "docs")
+                if os.path.isdir(docs_dir):
+                    for fn in sorted(os.listdir(docs_dir)):
+                        if fn.endswith((".pdf", ".py")):
+                            zf.write(os.path.join(docs_dir, fn), arcname=f"docs/{fn}")
+            self.set_status(f"exported archive + tools to {path}")
+            messagebox.showinfo(
+                "Export complete",
+                f"Written to:\n{path}\n\nRecipient unzips it, then runs:\n"
+                "  python3 snapshot.py --restore\n  python3 valves_gui.py\n\n"
+                "(full walkthrough in QUICKSTART.md, included in the zip)")
+        except Exception as e:
+            messagebox.showerror("Export failed", str(e))
+
+    def do_import_csv(self):
+        path = filedialog.askopenfilename(
+            title="Upload CSV (see upload_template.csv for the columns)",
+            filetypes=[("CSV file", "*.csv"), ("All", "*")])
+        if not path:
+            return
+        try:
+            import valves as cli
+            cli.cmd_import_csv(self.con, argparse.Namespace(file=path))
+            self.refresh_boxes()
+            self.run_search()
+            self.set_status(f"imported stock from {path}")
+        except Exception as e:
+            messagebox.showerror("Import failed", str(e))
+
+    def do_create_upload_template(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", initialfile="upload_template.csv",
+            filetypes=[("CSV file", "*.csv")])
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write("type,box,qty,maker,condition,notes\n")
+        self.set_status(f"wrote a blank upload template to {path}")
+        messagebox.showinfo(
+            "Template written",
+            f"Wrote a blank upload template to:\n{path}\n\n"
+            "One row per lot - type and box are required, the rest optional. Fill it in, then "
+            "Tools > Import upload CSV...")
+
+    def do_generate_csv_prompt(self):
+        lines = [
+            "You are helping me turn my own valve/tube collection records into a CSV file for "
+            "the valve-inventory tool. I have some existing data - it might be a spreadsheet, "
+            "photos of boxes, handwritten notes, or just me telling you what I remember - and "
+            "it's probably inconsistent or incomplete.", "",
+            "Please interview me to fill in the gaps rather than guessing: ask me, one box or "
+            "batch at a time, for the type designation, which box/location it's in, how many, "
+            "and (optional) the manufacturer, condition, and any notes. If I give you a rough "
+            "photo description or a messy list, parse what you can and ask about anything "
+            "unclear or ambiguous rather than assuming.", "",
+            "Once we've gone through everything, write it out as a CSV with this exact header "
+            "and column order:", "",
+            "type,box,qty,maker,condition,notes", "",
+            "One row per lot. type and box are required for every row; use 1 for qty if not "
+            "given, and leave maker/condition/notes blank rather than guessing. Give me the "
+            "finished CSV as a code block I can save directly to a file.", "",
+            "--- HOW TO USE THE RESULT ---",
+            "Save my reply as a .csv file, then run:",
+            "  python3 valves.py import-csv <file>.csv",
+            "or use Tools > Import upload CSV... in the GUI. New types get classified "
+            "automatically from their designation; existing types just get more stock added.",
+        ]
+        prompt = "\n".join(lines)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt", initialfile="csv_builder_prompt.txt",
+            filetypes=[("Text file", "*.txt")])
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(prompt)
+        self.set_status(f"wrote a CSV-building prompt to {path}")
+        messagebox.showinfo(
+            "Prompt written",
+            f"Wrote a CSV-building prompt to:\n{path}\n\n"
+            "Paste it into any Claude chat (no file/web access needed for this one), answer "
+            "its questions, save the CSV it gives you, then Tools > Import upload CSV...")
+
+    def do_generate_prompt(self):
+        rows = [dict(r) for r in self.con.execute("""
+            SELECT t.type_key, t.name, COALESCE(SUM(s.qty),0) qty, t.function
+            FROM valve_type t LEFT JOIN stock s ON s.type_key=t.type_key
+            WHERE t.confidence='inferred' OR t.function IS NULL OR t.datasheet_path IS NULL
+            GROUP BY t.type_key ORDER BY qty DESC LIMIT 60""")]
+        if not rows:
+            messagebox.showinfo("Nothing to research", "Every held type is already confirmed.")
+            return
+        lines = [
+            "You are researching reference electrical parameters for vacuum-tube (valve) types "
+            "for a personal inventory database. This data may inform real amplifier builds, so "
+            "ACCURACY MATTERS: only record a value if a source clearly and specifically states "
+            "it for THIS exact type designation. Never estimate, guess, or borrow figures from "
+            "a similar-looking type without confirming they're the same tube. If you can't find "
+            "reliable data, say so - do not fabricate.", "",
+            "Search manufacturer datasheets, radiomuseum.org, Duncan's TDSL "
+            "(https://tdsl.duncanamps.com/show.php?des=DESIGNATION), frank.pocnet.net, and "
+            "general web search as needed.", "",
+            "For each type below, find: function, base/socket, pins, heater voltage or current, "
+            "max anode voltage, max anode dissipation, gm (mA/V), mu, power output (W), max "
+            "frequency (MHz), a short typical-use description IN YOUR OWN WORDS (not copied "
+            "verbatim - copyright), any equivalent designations, and the source URL.", "",
+            "Types to research (name, held quantity):",
+        ]
+        for r in rows:
+            lines.append(f"{r['name']}\tqty={r['qty']}"
+                        + ("" if not r["function"] else f"\t(current guess: {r['function']})"))
+        lines += [
+            "", "Output format: for EACH type, one block exactly like this (leave a field "
+            "blank after the colon if you couldn't confirm it - don't write 'unknown', just "
+            "leave it blank):", "",
+            "TYPE_NAME", "function:", "base:", "pins:", "heater_v:", "heater_a:", "va_max:",
+            "pa_max:", "gm:", "mu:", "power_out:", "freq_max:", "typical_use:", "equivalents:",
+            "source_url:",
+            "confidence_note: (e.g. 'multiple sources agree', or 'could not verify, low "
+            "confidence')", "---", "",
+            "Respond with ONLY these blocks, one per type, nothing else - no preamble, no "
+            "summary.", "",
+            "--- HOW TO USE THE RESULTS ---",
+            "Save my reply to a text file, then run:",
+            "  python3 import_researched.py <file> --yes",
+            "or use Tools > Apply researched data... in the GUI.",
+        ]
+        prompt = "\n".join(lines)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt", initialfile="research_prompt.txt",
+            filetypes=[("Text file", "*.txt")])
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(prompt)
+        self.set_status(f"wrote research prompt for {len(rows)} types to {path}")
+        messagebox.showinfo(
+            "Prompt written",
+            f"Wrote a research prompt for {len(rows)} types to:\n{path}\n\n"
+            "Paste its contents into Claude (claude.ai or Claude Code), save the reply to a "
+            "text file, then use Tools > Apply researched data...")
+
+    def do_generate_download_prompt(self):
+        rows = [dict(r) for r in self.con.execute("""
+            SELECT t.type_key, t.name, COALESCE(SUM(s.qty),0) qty
+            FROM valve_type t LEFT JOIN stock s ON s.type_key=t.type_key
+            WHERE t.datasheet_path IS NULL
+            GROUP BY t.type_key ORDER BY qty DESC""")]
+        if not rows:
+            messagebox.showinfo("Nothing to fetch", "Every held type already has a linked datasheet.")
+            return
+        lines = [
+            "You are building a local datasheet archive for a personal vacuum-tube (valve) "
+            "inventory tool (valves.py / valves_gui.py). This needs an agent with file-system "
+            "AND web access (e.g. Claude Code) - it won't work in a plain chat session, since "
+            "it has to actually write files to disk.", "",
+            "First, try the tool's own fetcher, which cheaply covers most European/British "
+            "types from a single hobbyist archive:",
+            "  python3 fetch_datasheets.py --index      # skip if url_index.json already exists",
+            "  python3 fetch_datasheets.py --download",
+            "  python3 valves.py scan",
+            "That's rate-limited (2s/request, please don't lower it) and resumable - let it "
+            "finish before moving on. It only pulls from frank.pocnet.net, so it will miss "
+            "transmitting/military/Russian types that site doesn't carry.", "",
+            "Then, for whatever's STILL missing a datasheet after that (recheck with "
+            "`python3 valves.py gaps`), search per type: manufacturer archives (Eimac/CPI for "
+            "transmitting tubes, Duncan's TDSL at "
+            "https://tdsl.duncanamps.com/show.php?des=DESIGNATION, which is good for "
+            "higher-power tubes), radiomuseum.org, and df6na.de for Russian/Soviet "
+            "designations. Only use a source you're confident is genuinely for this exact "
+            "type - a wrong-but-plausible match is worse than no datasheet at all (this has "
+            "happened before in this collection: an auto-downloaded 'R71.pdf' turned out to "
+            "be an unrelated phototube, not the rectifier this actually is).", "",
+            "If a WebFetch-style tool garbles a PDF's binary content, that doesn't mean the "
+            "PDF is bad - fetch/save the raw file and read it directly instead.", "",
+            "When you find a genuine PDF datasheet:",
+            "  1. Save it to  datasheets/<first letter of the type key>/<type key>.pdf",
+            "     e.g. EL84 -> datasheets/E/EL84.pdf, 6146B -> datasheets/6/6146B.pdf",
+            "     (the type key is the name with punctuation stripped, e.g. ECF80 not "
+            "ECF80/CV5215 - check with `python3 valves.py show TYPE` if unsure)",
+            "  2. Run  python3 valves.py scan  to link it in, or if the filename won't match "
+            "automatically, set it directly:",
+            "       python3 valves.py set TYPE --datasheet-path <path relative to datasheets/>",
+            "If you find a good page but can't get a PDF (HTML-only, or blocked), record the "
+            "URL instead so there's still a lead:",
+            "     python3 valves.py set TYPE --datasheet-url <url>", "",
+            "Types still missing a datasheet (name, held quantity):",
+        ]
+        for r in rows:
+            lines.append(f"{r['name']}\tqty={r['qty']}")
+        lines += [
+            "", "When you're done, run  python3 snapshot.py  to refresh the committed data/ "
+            "snapshot with whatever got linked (the datasheets themselves aren't committed - "
+            "see README - only the fact that a type now has one).",
+        ]
+        prompt = "\n".join(lines)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt", initialfile="datasheet_download_prompt.txt",
+            filetypes=[("Text file", "*.txt")])
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(prompt)
+        self.set_status(f"wrote datasheet-download prompt for {len(rows)} types to {path}")
+        messagebox.showinfo(
+            "Prompt written",
+            f"Wrote a datasheet-download prompt for {len(rows)} types to:\n{path}\n\n"
+            "This one needs an agent with file/web access (Claude Code, not a plain chat) "
+            "since it downloads files to disk. Paste it in and let it run, then reopen this "
+            "database (or Tools > Scan datasheet archive) to pick up whatever it found.")
+
+    def do_apply_research(self):
+        path = filedialog.askopenfilename(
+            title="Researched data (Claude's reply, saved as text)",
+            filetypes=[("Text file", "*.txt"), ("All", "*")])
+        if not path:
+            return
+        try:
+            import import_researched as ir
+            with open(path, encoding="utf-8") as f:
+                records = ir.parse_blocks(f.read())
+            applied, skipped, missing = ir.apply_records(self.con, records, dry_run=False)
+        except Exception as e:
+            messagebox.showerror("Apply failed", str(e))
+            return
+        self.con.commit()
+        self.run_search()
+        msg = f"Applied {len(applied)} types."
+        if skipped:
+            msg += f"\nSkipped (no data found): {', '.join(skipped)}"
+        if missing:
+            msg += f"\nNot in database: {', '.join(missing)}"
+        self.set_status(f"applied research data from {path}: {len(applied)} types")
+        messagebox.showinfo("Applied", msg)
 
     def clear_filters(self):
         for v in (self.v_text, self.v_function, self.v_base,
@@ -994,6 +1752,111 @@ class App(ttk.Frame):
         self.con.execute("DELETE FROM socket WHERE id=?", (r["id"],))
         self.con.commit()
         self.run_sock_search()
+
+    # ---------------------------------------------------------------- parametric browser
+
+    def pb_load_all(self):
+        """category/variable_mu aren't real columns, so filtering happens in
+        Python over the whole (small, ~250-row) type list rather than SQL."""
+        rows = [dict(r) for r in self.con.execute("""
+            SELECT t.*, COALESCE(SUM(s.qty),0) qty
+            FROM valve_type t LEFT JOIN stock s ON s.type_key = t.type_key
+            GROUP BY t.type_key""")]
+        for r in rows:
+            r["category"] = browse_category(r.get("function"))
+            r["variable_mu"] = "yes" if is_variable_mu(r) else "no"
+        return rows
+
+    def pb_matches(self, r, exclude=None):
+        name = self.pb_name.get().strip().lower()
+        if name and name not in (r.get("name") or "").lower():
+            return False
+        for field, _label in PB_CAT_FIELDS:
+            if field == exclude:
+                continue
+            val = self.pb_cat_vars[field].get()
+            if val and str(r.get(field) or "") != val:
+                return False
+        for field, _label in PB_NUM_FIELDS:
+            if field == exclude:
+                continue
+            op = self.pb_num_op[field].get()
+            val = self.pb_num_val[field].get()
+            if op and val:
+                try:
+                    fval = float(val)
+                except ValueError:
+                    continue
+                rv = r.get(field)
+                if rv is None or not compare_op(rv, op, fval):
+                    return False
+        return True
+
+    def pb_refresh_dropdowns(self):
+        for field, _label in PB_CAT_FIELDS:
+            subset = [r for r in self.pb_all if self.pb_matches(r, exclude=field)]
+            vals = sorted({str(r[field]) for r in subset if r.get(field)})
+            self.pb_cat_combos[field]["values"] = [""] + vals
+        for field, _label in PB_NUM_FIELDS:
+            subset = [r for r in self.pb_all if self.pb_matches(r, exclude=field)]
+            vals = sorted({r[field] for r in subset if r.get(field) is not None})
+            self.pb_num_combos[field]["values"] = [
+                f"{v:g}" if isinstance(v, float) else str(v) for v in vals]
+
+    def pb_run_search(self, *_a):
+        self.pb_all = self.pb_load_all()
+        self.pb_rows = [r for r in self.pb_all if self.pb_matches(r)]
+        self.pb_rows.sort(key=lambda r: r["name"])
+        self.pb_populate()
+        self.pb_refresh_dropdowns()
+
+    def pb_populate(self):
+        self.pb_tree.delete(*self.pb_tree.get_children())
+        for r in self.pb_rows:
+            vals = ["" if r.get(k) is None else r.get(k) for k, _l, _w in BROWSE_COLS]
+            tag = "inferred" if r.get("confidence") == "inferred" else ""
+            self.pb_tree.insert("", "end", iid=r["type_key"], values=vals, tags=(tag,))
+        total_qty = sum(r["qty"] for r in self.pb_rows)
+        self.pb_status.config(
+            text=f"{len(self.pb_rows)} types, {total_qty} valves"
+                 f"   -   double-click a row for its box breakdown")
+
+    def pb_sort(self, key):
+        asc = not self.pb_sort_state.get(key, False)
+        self.pb_sort_state = {key: asc}
+
+        def sk(r):
+            v = r.get(key)
+            if v is None:
+                return (1, 0, "")
+            if isinstance(v, (int, float)):
+                return (0, v, "")
+            return (0, 0, str(v).lower())
+
+        self.pb_rows.sort(key=sk, reverse=not asc)
+        self.pb_populate()
+
+    def pb_clear(self):
+        self.pb_name.set("")
+        for field, _label in PB_CAT_FIELDS:
+            self.pb_cat_vars[field].set("")
+        for field, _label in PB_NUM_FIELDS:
+            self.pb_num_op[field].set("")
+            self.pb_num_val[field].set("")
+        self.pb_run_search()
+
+    def pb_show_boxes(self):
+        sel = self.pb_tree.selection()
+        if not sel:
+            return
+        key = sel[0]
+        t = self.con.execute("SELECT * FROM valve_type WHERE type_key=?", (key,)).fetchone()
+        if not t:
+            return
+        rows = [dict(r) for r in self.con.execute(
+            "SELECT box, qty, manufacturer, condition FROM stock WHERE type_key=? "
+            "ORDER BY CAST(box AS INTEGER), box", (key,))]
+        TypeDetailWindow(self, dict(t), rows)
 
 
 def main():

@@ -200,6 +200,47 @@ def cmd_add(con, a):
     print(f"added {a.qty} x {a.type} to box {a.box}")
 
 
+def cmd_import_csv(con, a):
+    """Bulk-add stock from a CSV (see upload_template.csv for the columns)."""
+    import csv
+    added_types = added_lots = 0
+    errors = []
+    with open(a.file, encoding="utf-8-sig", newline="") as f:
+        for i, row in enumerate(csv.DictReader(f), start=2):
+            t = (row.get("type") or "").strip()
+            box = (row.get("box") or "").strip()
+            if not t or not box:
+                errors.append(f"row {i}: type and box are required, skipped")
+                continue
+            key = V.norm(t)
+            try:
+                qty = int(row.get("qty") or 1)
+            except ValueError:
+                errors.append(f"row {i}: bad qty {row.get('qty')!r}, used 1")
+                qty = 1
+            maker = (row.get("maker") or "").strip() or None
+            condition = (row.get("condition") or "").strip() or None
+            notes = (row.get("notes") or "").strip() or None
+            if not con.execute("SELECT 1 FROM valve_type WHERE type_key=?", (key,)).fetchone():
+                inf = V.classify(t)
+                con.execute(
+                    """INSERT INTO valve_type (type_key,name,function,family,
+                       heater_v,heater_a,confidence) VALUES (?,?,?,?,?,?,'inferred')""",
+                    (key, t, inf.get("function"), inf.get("family"),
+                     inf.get("heater_v"), inf.get("heater_a")))
+                added_types += 1
+            con.execute(
+                """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (key, box, qty, maker, condition, datetime.date.today().isoformat(), notes))
+            con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (box, "attic"))
+            added_lots += 1
+    con.commit()
+    print(f"imported {added_lots} lots ({added_types} new types)")
+    for e in errors:
+        print(" ", e)
+
+
 def cmd_take(con, a):
     keys = resolve(con, a.type)
     if not keys:
@@ -535,6 +576,9 @@ def main():
     s.add_argument("--qty", type=int, default=1); s.add_argument("--maker")
     s.add_argument("--condition"); s.add_argument("--notes")
     s.set_defaults(fn=cmd_add)
+
+    s = sub.add_parser("import-csv", help="bulk-add stock from a CSV (see upload_template.csv)")
+    s.add_argument("file"); s.set_defaults(fn=cmd_import_csv)
 
     s = sub.add_parser("take", help="remove stock you have used")
     s.add_argument("type"); s.add_argument("--qty", type=int, default=1)

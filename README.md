@@ -1,7 +1,8 @@
 # Valve inventory
 
 A SQLite database and command-line tool for the attic collection.
-**1,441 valves · 258 types · 36 boxes**, converted from the 38-tab spreadsheet.
+**1,441 valves · 253 types · 36 boxes**, converted from the 38-tab spreadsheet
+(a handful of duplicate/dual-marked entries have since been merged).
 
 ## Files
 
@@ -17,10 +18,15 @@ A SQLite database and command-line tool for the attic collection.
 | `test_smoke.py` | Quick self-check that the pieces still fit together. |
 | `data/` | Committed text snapshot of the collection. |
 | `valve_inventory.xlsx` | Spreadsheet snapshot, regenerate any time with `export`. |
+| `upload_template.csv` | Column layout for bulk-adding stock — `import-csv` / Tools > Import upload CSV. |
+| `import_researched.py` | Applies a research assistant's reply back into the database — see "Filling in the reference data" below. |
+| `QUICKSTART.md` | Standalone install/use walkthrough, bundled into `Export archive and tools`. |
+| `docs/` | The three PDF manuals (Installation, User, Technical) and `build_manuals.py`, which regenerates them. Also linked from the GUI's Help menu. |
 
 Requires Python 3.8+. `openpyxl` is only needed for export; `tkinter` only for the
 GUI — on most systems it ships with Python, but Debian and Ubuntu split it out
-into `python3-tk`.
+into `python3-tk`. `reportlab` is only needed to regenerate the PDF manuals in
+`docs/` (`python3 docs/build_manuals.py`).
 
 ## The window
 
@@ -30,21 +36,62 @@ python3 valves_gui.py
 
 Both front ends read and write the same `valves.db`, so use whichever suits the
 moment — the GUI for browsing and filling in datasheet figures, the CLI for
-quick lookups and scripting.
+quick lookups and scripting. Three tabs:
 
-- **Boxes down the left** — click one to filter, "All boxes" to clear.
-- **Search row** — text, function, maker, and the numeric fields, which take
-  the same `>20` / `<7` / `>=250` comparisons as the CLI.
-- **Results table** — click any heading to sort. **Amber rows are types whose
-  parameters are still inferred rather than read from a datasheet.**
+### Valves
+
+- **Boxes down the left** — click a heading to sort, click a box to filter,
+  "All boxes" to clear.
+- **Search row** — text, function, base, and the numeric fields, taking the
+  same `>20` / `<7` / `>=250` comparisons as the CLI. Searching a type by name
+  also pulls in stock of anything cross-referenced as its equivalent (shown
+  in blue, labelled which type it's equivalent to) — search `ECF80` and you'll
+  see `PCF80` stock too. **Advanced...** opens every field — maker, condition,
+  family, confidence, has-datasheet, and the rest of the numeric ratings.
+- **Results table** — click a heading to sort, double-click a row to open its
+  datasheet. **Amber rows are unconfirmed (inferred); blue rows are
+  equivalents pulled in by a search.**
 - **Panel on the right** — the type's reference record, editable in place.
-  *Save* keeps it as inferred; *Save + confirm* marks it confirmed and the row
-  turns black. That amber-to-black transition is the progress bar for working
-  through the collection.
+  *Save* keeps it inferred; *Save + confirm* marks it confirmed and the row
+  turns black — that amber-to-black transition is the progress bar for
+  working through the collection. Below it, **Similar types** lists other
+  held types with the same function and every shared electrical rating within
+  50% — not equivalents, just plausible substitutes with modification (heater
+  mismatches are flagged, not filtered out, since a dropping resistor or a
+  different supply can usually cover that). Double-click one to look it up.
+  *Open datasheet* / *RadioMuseum* / *Web search* look up whatever's selected.
 - **Add stock / Take / Move / Delete lot** act on the selected row. *Add stock*
   creates the type automatically if it's new, classifying it as it goes.
-- **Tools menu** — collection summary, what still needs data, duplicate
-  candidates, and scanning the datasheet archive.
+
+### Bases / Sockets
+
+Same idea as the Valves tab, for the sockets/bases themselves rather than the
+valves that plug into them — tracked separately since they're not valves.
+
+### Browse
+
+A parametric filter: dropdowns for function/base/family/confidence and
+operator+value pickers (`<` `=` `>`) for every numeric rating, all cascading —
+picking one narrows what the others offer. A name filter narrows the list as
+you type (`3cx`, `PL`, whatever). Click a heading to sort; double-click a
+type for a popup showing exactly which boxes hold it and how many in each.
+
+### Tools menu
+
+Collection summary, what still needs data, duplicate candidates, scanning the
+datasheet archive; a blank upload template, CSV import, and a CSV-building
+prompt for turning someone's own messy records into an import (see "Keeping
+it current" below); and the two research-prompt workflows (see "Filling in
+the reference data" below) — one for electrical parameters, one for pulling
+missing datasheet PDFs into the local archive. **File > Export archive and
+tools** zips up the tools, docs, and a fresh snapshot for handing the whole
+thing to someone else — see `QUICKSTART.md`.
+
+### Help menu
+
+A task-by-task **User guide** covering all of the above, plus links to open
+the three PDF manuals in `docs/` (Installation, User, Technical) in whatever
+PDF viewer is installed.
 
 Merging duplicate types is command-line only, deliberately: it rewrites stock
 rows and is not something to do by mis-click.
@@ -126,26 +173,46 @@ python3 valves.py export                             # refresh the xlsx
 ```
 
 `add` creates the type automatically if it's new, classifying it from its
-designation as it goes.
+designation as it goes. For a whole batch at once, use `import-csv` (or
+Tools > Import upload CSV in the GUI) with a file shaped like
+`upload_template.csv` — same auto-classification, one row per lot. Tools >
+Create upload template writes a blank copy of that CSV ready to fill in; if
+your existing records aren't already in that shape, Tools > Generate
+CSV-building prompt writes a prompt for any Claude chat that interviews you
+(or reads whatever spreadsheet, notes, or photos you describe) and hands back
+a ready-to-import CSV.
 
 ## Filling in the reference data
 
-Every parameter currently in `valve_type` was **inferred from the type
-designation**, not read from a datasheet. Types are marked `inferred` until you
-confirm them:
+Parameters start out **inferred from the type designation** — a guess, not a
+datasheet reading. Types are marked `inferred` until confirmed, either by hand:
 
 ```bash
 python3 valves.py set EL34 --pa 25 --va 800 --gm 11 --mu 11 \
                            --base octal --pins 8 --power-out 25 --confirm
 ```
 
-`--confirm` flips the record to `confirmed`. `python3 valves.py gaps` lists what
-still needs attention, ordered by how many you actually hold — so the effort goes
-where it's worth spending.
+or by handing the gap list to a research assistant. In the GUI, Tools >
+Generate research prompt... writes a ready-to-paste prompt (same one described
+above, aimed at your highest-quantity unconfirmed types) into a text file.
+Paste it into Claude, save the reply, then Tools > Apply researched data...
+(or `python3 import_researched.py <file> --yes` from the command line) writes
+back only what was actually confirmed — a hedged finding ("could not verify",
+"plausible") is kept as a lead rather than marked `confirmed`.
 
-Coverage from the classifier: **232 of 258** types have a function,
-**197 of 258** have a heater rating. The rest are one-offs and service-coded
-types the naming conventions don't cover.
+Missing the datasheet PDF itself, rather than just the parameters? Tools >
+Generate datasheet download prompt... writes a prompt aimed at an agent with
+file *and* web access (Claude Code, not a plain chat, since it needs to write
+files to disk) — it tries `fetch_datasheets.py` first, then searches further
+for whatever's still missing and saves PDFs straight into the local archive.
+
+`--confirm` flips a record to `confirmed`. `python3 valves.py gaps` lists what
+still needs attention, ordered by how many you actually hold — so the effort
+goes where it's worth spending.
+
+Current coverage: **201 of 253** types are `confirmed`, **243** have a
+function and **227** a heater rating. The rest are one-offs and rare types
+the naming conventions and the usual archives don't cover.
 
 ## The datasheet archive
 

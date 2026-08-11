@@ -40,7 +40,7 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 39,PCC189,2,1,Mullard,,2026-08-09,The PCC189 is a low impedance high gain double triode for use as a cascode amplifier in television front-ends. It specifically states that it is built with frame grids. The valves are variable μ types for use at RF as AGC controlled devices.
 40,PCC84,2,1,Mullard,,2026-08-09,double triode shows how valves developed to meet the needs of VHF television transmission.
 41,PCL800,2,1,Mullard,,2026-08-09,Triode output pentode designed for field timebase or audio service. The PCL800 is a television receiver valve with a 300 mA heater for use with series heater chains. Domestic televisions worked at mains voltage and did not have a mains transformer.
-42,PCL80585,2,2,Pinnacle,,2026-08-09,The PCL85 is a triode and output pentode combined.
+42,PCL85,2,2,Pinnacle,,2026-08-09,The PCL85 is a triode and output pentode combined. [was listed as PCL805/85]
 43,PCL85,2,2,Mazda,,2026-08-09,The PCL85 is a triode and output pentode combined.
 44,PCL86,2,1,Mullard,,2026-08-09,"This PCL86 was made in the UK by Mullard and was designed for the audio stage of a television receiver and offered a quality output at about 4W. Pentode, Triode."
 45,PF200,2,1,Mullard,,2026-08-09,"The PFL200 combines a screened amplifier pentode and an output pentode in the one envelope. It was designed for television use, but probably not for audio output as the operating conditions do not give an output power. The mutual conductance of the output pentode at 21 is very high, pointing to a very small space between cathode and control grid."
@@ -185,7 +185,7 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 184,ECF80,11,13,,,2026-08-09,a high slope RF pentode and not a variable μ type. The EF85 was the variable μ counterpart to the EF80.
 185,EF85,11,27,,,2026-08-09,The EF85 is a VHF variable μ pentode and is the counterpart to the EF80 straight RF pentode.
 186,CV1375,11,1,,,2026-08-09,EF85 Equiv
-187,ECF80CV5215,11,5,,,2026-08-09,ECF80
+187,ECF80,11,5,,,2026-08-09,ECF80 [was listed as ECF80/CV5215]
 188,QS15015,11,1,,,2026-08-09,miniature voltage stabiliser. The striking voltage is 170 and for burning currents of 2 - 10 mA the regulation is 5 Volts.
 189,QQV026,11,1,,,2026-08-09,ouble beam tetrodes in this 1950s series from Mullard. It was introduced for 470 MHz (UHF) mobile transmitters.
 190,CV2799,11,1,,,2026-08-09,double beam transmitting tetrode.
@@ -289,8 +289,8 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 288,5642,20,2,,,2026-08-09,"The 5642 is an EHT rectifier diode designed specifically for use in oscilloscope EHT supplies and as a measuring instrument component it is a special quality device, the naming convention clearly shows this. The consumer DY70 is closely related to this special quality professional device."
 289,6J6A,20,1,,,2026-08-09,Twin Triodes
 290,6CZ5,20,1,,,2026-08-09,Beam Pentode Amplifier
-291,CV5215,20,1,,,2026-08-09,The CV5215 is a UK government code for the ECF80. The triode is the oscillator and has to produce 5 V pk-pk signal. The screened pentode is the mixer. The valve has two cathode connections so that the two valves can be used separately if required.
-292,L776C4,20,2,,,2026-08-09,"The 6C4 triode valve was specified as both an amplifier and an RF power valve. In the latter role it would deliver 5.5 Watts in class C operation. With a very small envelope volume, this would make it ideal for hand portable equipment. In larger apparatus it could deliver enough drive power for much larger PA's."
+291,ECF80,20,1,,,2026-08-09,The CV5215 is a UK government code for the ECF80. The triode is the oscillator and has to produce 5 V pk-pk signal. The screened pentode is the mixer. The valve has two cathode connections so that the two valves can be used separately if required. [was listed as CV5215]
+292,EC90,20,2,,,2026-08-09,"The 6C4 triode valve was specified as both an amplifier and an RF power valve. In the latter role it would deliver 5.5 Watts in class C operation. With a very small envelope volume, this would make it ideal for hand portable equipment. In larger apparatus it could deliver enough drive power for much larger PA's. [was listed as L77/6C4]"
 293,6BA6,20,1,,,2026-08-09,The 6BA6 is described by Brimar as a variable μ pentode for use at HF. Most probably as RF amplifiers in radio receivers.
 294,Z759,20,1,,,2026-08-09,The Z759 is an RF pentode with a high mutual conductance designed for video or other wideband RF amplification.
 295,ECF80,20,1,,,2026-08-09,Brimar data sheets show this triode pentode valve as designed for VHF frequency changer use. Mullard say that the ECF80 was designed for operation up to 220 MHz.
@@ -315,7 +315,7 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 314,2XX27N,25,8,,,2026-08-09,"If you remove the aluminium screening case, you can discover a lovely valve inside."
 315,EL84,25,4,,,2026-08-09,2xzapex (GDR)
 316,6P14P,25,4,,,2026-08-09,
-317,ECC8312AX7,25,4,,,2026-08-09,
+317,ECC83,25,4,,,2026-08-09,[was listed as ECC83/12AX7]
 318,UCL83,25,1,,,2026-08-09,
 319,6C19N,26,12,,,2026-08-09,"he 6C19N / 6S19P Vacuum tube is a Russian Audiophile glass type power triode used in high-end amplifiers. They are used in the Transcendent Sound T16 OTL power amplifers among others, which uses an incredible 16 of these 6C19N / 6S19P tubes!"
 320,6J1P,26,4,,,2026-08-09,"The 6j1p is a high frequency pentode valve manufactured by the Voskhod factory in Russia. It is a seven-pin electronic component requiring a B7G base socket for connection, and 6.3 V for the heater filament. Using a 6j1p pentode as a triode is a very simple task, but unfortunately very few people understand how a pentode operates, however you might be wondering why use pentodes at all in the first place. Triodes are getting expensive due to their ever-dwindling stocks, and looking on eBay, the cost of a ECC81, ECC82, ECC83, and ECC85 has sky rocketed. However just recently I came across a cheap valve 6j1p selling for just one pound. It is very similar to the Russian 6z1p pentode and I was intrigued because there must be a factory out there making them!"
@@ -344,7 +344,7 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 343,5U4G,32,2,,,2026-08-09,
 344,6146B,32,15,,,2026-08-09,
 345,3500Z,Loose,4,,,2026-08-09,Power Triode 700 W Output
-346,31000Z,Loose,2,,,2026-08-09,Power Triode 1500W Output
+346,41000A,Loose,2,,,2026-08-09,Power Triode 1500W Output
 347,E3062,Loose,1,,,2026-08-09,"Toshiba E3062 oscillation tube for 4kw HF welding machine, Triode"
 348,GU35,Loose,3,,,2026-08-09,"Power Tetrode 3.5KW out, Heater 6.3V at 38 Amps.  5KV Anode Max"
 349,GS35,Loose,2,,,2026-08-09,Power Triode 2KW out
@@ -353,7 +353,7 @@ id,type_key,box,qty,manufacturer,condition,date_added,notes
 352,GU46,Loose,2,,,2026-08-09,with sockets
 353,3CX1200A7,Loose,1,,,2026-08-09,with socket and chimney Possibly not quite right
 354,GS23,Loose,1,,,2026-08-09,
-355,3C1500A7,Loose,2,,Pulls,2026-08-09,Pulls may work
+355,3CX1500A7,Loose,2,,Pulls,2026-08-09,Pulls may work
 356,2P29,33,16,,,2026-08-09,"2.2v Heaters, Audio driver, high quality, 1-2 W out. HF capable Pentode"
 357,6N2P,33,20,,,2026-08-09,"Dual Triode, 6.3V heater, like 12AX7 - with slight differences in pins."
 358,6E6PG,34,100,,,2026-08-09,Valve 29.5 ma/V High gain tetrode. Good for HF. Audiophile. 8.5W out.
