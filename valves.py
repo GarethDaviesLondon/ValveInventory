@@ -724,6 +724,17 @@ def main():
     s.add_argument("path", nargs="?", default="valve_inventory.xlsx"); s.set_defaults(fn=cmd_export)
 
     a = p.parse_args()
+    # Fresh clone or export: valves.db doesn't exist yet, but there's a
+    # data/valves.sql snapshot to build it from. V.init_db() below would
+    # happily open a brand-new, silently EMPTY database instead - warn rather
+    # than let that pass with no explanation. Non-blocking (just a stderr
+    # note, no prompt) so this stays safe to use in scripts/automation - see
+    # valves_gui.py's main() for the interactive equivalent.
+    if not os.path.exists(a.db) and os.path.exists(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "valves.sql")):
+        print(f"note: {a.db} doesn't exist yet, but data/valves.sql does - "
+              f"run 'python3 snapshot.py --restore' to build it from that, "
+              f"or this will start empty.", file=sys.stderr)
     con = V.init_db(a.db)
     a.fn(con, a)
     con.close()

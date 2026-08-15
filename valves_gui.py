@@ -2761,14 +2761,34 @@ class App(ttk.Frame):
 
 
 def main():
-    """CLI entry point: parse --db/--archive, build the Tk root window and
-    App, and run the event loop."""
+    """CLI entry point: parse --db/--archive, offer to restore a fresh
+    database from data/valves.sql if this looks like a brand-new clone or
+    export, then build the Tk root window and App and run the event loop."""
     p = argparse.ArgumentParser()
     p.add_argument("--db", default=V.DB_DEFAULT)
     p.add_argument("--archive", default=V.ARCHIVE_DEFAULT)
     a = p.parse_args()
 
     root = tk.Tk()
+    root.withdraw()  # stay hidden until setup below is done, to avoid a flash of an empty window
+
+    # First run from a fresh clone or export: valves.db doesn't exist yet,
+    # but there's a data/valves.sql snapshot sitting right there to build it
+    # from. V.init_db() below would happily open a brand-new, silently EMPTY
+    # database instead - the single biggest point of confusion for anyone who
+    # skips the documented restore step (see README/QUICKSTART.md). Offer to
+    # do it now rather than let that happen with no explanation.
+    here = os.path.dirname(os.path.abspath(__file__))
+    sql_dump = os.path.join(here, "data", "valves.sql")
+    if not os.path.exists(a.db) and os.path.exists(sql_dump):
+        if messagebox.askyesno(
+                "Set up the database",
+                f"{os.path.basename(a.db)} doesn't exist yet, but this folder has a "
+                "data/valves.sql snapshot to build it from.\n\n"
+                "Restore the database from that snapshot now?"):
+            import snapshot as snap
+            snap.restore(argparse.Namespace(db=a.db, force=False))
+
     try:
         style = ttk.Style()
         for theme in ("clam", "vista", "aqua", "default"):
@@ -2780,6 +2800,7 @@ def main():
     except tk.TclError:
         pass
     App(root, a.db, a.archive)
+    root.deiconify()
     root.mainloop()
 
 
