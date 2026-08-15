@@ -202,21 +202,6 @@ The CSVs are what git will show you diffs in — you get a readable history of
 what changed in the collection, which a committed `.db` would not give you.
 `valves.sql` is the full dump that `--restore` rebuilds from.
 
-### Before making the repository public
-
-The `typical_use` and `notes` fields hold descriptive text carried over from the
-original spreadsheet, much of it gathered from r-type.org. That text isn't yours
-to republish. Either keep the repository private, or run:
-
-```bash
-python3 snapshot.py --strip-notes
-```
-
-which writes the exports without those fields. The classifications, parameters
-and box locations — the actually useful part — are unaffected. Datasheet PDFs
-are gitignored for the same reason; anyone cloning rebuilds their own archive
-with `fetch_datasheets.py`.
-
 ## Starting your own collection
 
 The database that ships here is mine. To make it yours:
@@ -346,43 +331,8 @@ For parameters rather than PDFs, `https://tdsl.duncanamps.com/show.php?des=EL34`
 gives tabulated figures for filling in `set`, and there's a downloadable offline
 edition.
 
-## Housekeeping
 
-```bash
-python3 valves.py dupes                  # candidate duplicate type entries
-python3 valves.py merge ECC83S ECC83     # dry run
-python3 valves.py merge ECC83S ECC83 --yes
-```
 
-`dupes` is a *candidate* list matched on name similarity — it will offer
-`30FL1`/`30FL14` and `PCF80`/`PCF801`, which are genuinely different valves.
-Only merge what you know to be the same thing. Merging keeps all the stock and
-records the old designation as an equivalent.
-
-## Two entries need your eye
-
-Carried over from the original sheets and flagged rather than guessed:
-
-- **Box 14** — `?(Similar)`, unmarked, listed next to a Mullard TY4-125.
-- **Box 17** — `207`, marked UNIDENTIFIED.
-
-Also worth a decision: Box 17 holds `210`, `210HL` and `210 SS`, where the `210`
-is noted as unmarked and *suspected* to be a 210. They're currently three
-separate types.
-
-## Conversion notes
-
-Things the converter had to decide, so you can check them:
-
-- **Box 6 ECL80** — recorded as 75, per your instruction (was "50+").
-- **Box 8** — was one row per physical valve. Consolidated to 6 GEC KT66
-  (one flagged `Loose Base`), 3 GZ34, 6 EF86, 1 R71.
-- **Box 30** — this sheet had quantity in column C and the equivalent in
-  column B, unlike every other sheet. Mapped accordingly.
-- **Manufacturer vs equivalent** — several sheets used one column for both.
-  Cells matching a known maker (Mullard, Mazda, GEC, Svetlana…) became
-  manufacturer; everything else became an equivalent.
-- **Continuation rows** — where a description spilled over several rows with a
   blank type cell (Box 23, 24, 26), the text was appended to the type's notes.
 - **Heater codes** — `30` in a Mazda designation is read as 300 mA series-chain
   current, not volts, so those types have `heater_a` rather than `heater_v`.
