@@ -87,6 +87,8 @@ quick lookups and scripting. Four tabs:
 
 ### Valves
 
+![The Valves tab: boxes sidebar, search row, results table, and the detail/edit panel](docs/screenshots/Inventory.png)
+
 - **Boxes down the left** — click a heading to sort, click a box to filter,
   "All boxes" to clear.
 - **Search row** — text, function, base, and the numeric fields, taking the
@@ -117,6 +119,8 @@ valves that plug into them — tracked separately since they're not valves.
 
 ### Browse
 
+![The Browse tab: cascading facet filters over every held type](docs/screenshots/BrowsingCollection.png)
+
 A parametric filter: dropdowns for function/base/family/confidence and
 operator+value pickers (`<` `=` `>`) for every numeric rating, all cascading —
 picking one narrows what the others offer. A name filter narrows the list as
@@ -124,6 +128,8 @@ you type (`3cx`, `PL`, whatever). Click a heading to sort; double-click a
 type for a popup showing exactly which boxes hold it and how many in each.
 
 ### Repair Bench
+
+![The Repair Bench tab: ECC83 identified, with in-stock matches and possible substitutes](docs/screenshots/RepairResearch.png)
 
 For "I've got this valve out of a set I'm fixing — what is it, and what have
 I got that could stand in for it?" Type the designation (and optionally which
