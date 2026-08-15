@@ -65,3 +65,19 @@ many you hold. If you have Claude Code or claude.ai available, the GUI's
 that asks Claude to research whatever's still unconfirmed and hand back
 data in a format `import_researched.py` can apply directly - see that
 menu item for the exact steps.
+
+## 7. This is someone else's collection, not a blank slate
+
+The database you just restored is whoever exported it to you - real box
+locations in someone else's attic, not sample data. If you're starting your
+own collection rather than adopting theirs, see "Starting your own
+collection" in `README.md` (also in `docs/INSTALLATION_MANUAL.pdf` if it
+came with this export) - the short version is delete `valves.db` and
+relaunch to start empty, or clear just the stock/box tables to keep the
+researched reference library.
+
+---
+
+MIT-licensed, provided without warranty of any kind, used at your own risk
+- see `LICENSE`. By running this application you're confirming you've
+reviewed the source for yourself and accept those terms.

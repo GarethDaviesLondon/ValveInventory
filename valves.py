@@ -2,6 +2,18 @@
 """
 valves.py - valve stock inventory.
 
+Command-line front end for the inventory: an argparse-based CLI with one
+cmd_*(con, a) function per subcommand (box, find, show, search, add, take,
+move, bases, sock-add, sock-take, sock-move, set, merge, dupes, scan, sheet,
+gaps, stats, export, import-csv). Each cmd_* function takes an open sqlite3
+connection (`con`, row_factory=sqlite3.Row - see valvelib.init_db) and the
+parsed argparse Namespace (`a`), and is responsible for its own commit().
+
+This module shares its schema, DB connection helper, and the valve-type
+classifier with the Tkinter desktop app (valves_gui.py) via valvelib.py -
+both read and write the same valves.db, so avoid duplicating logic here that
+belongs in valvelib.
+
   valves.py box 12                  what is in box 12
   valves.py find KT66               which boxes hold KT66 (follows equivalents)
   valves.py search --function pentode --heater 6.3 --pa '>20'
@@ -29,7 +41,15 @@ import valvelib as V
 # ---------------------------------------------------------------- helpers
 
 def resolve(con, name):
-    """Find a type_key from user input, following equivalents and substrings."""
+    """Find matching type_key(s) from free-text user input.
+
+    Tries three lookups in order, returning the first that finds anything:
+    1. an exact match on the normalised key;
+    2. a substring match on type_key (may return several types);
+    3. a substring match against each type's equivalents list, so a search
+       for e.g. '6L6' also finds types that merge() recorded 6L6 under.
+    Returns an empty list if nothing matches at all.
+    """
     key = V.norm(name)
     if not key:
         return []
@@ -47,6 +67,12 @@ def resolve(con, name):
 
 
 def table(rows, cols):
+    """Print `rows` (a list of dict-like records) as a plain-text table restricted to `cols`.
+
+    Column widths are sized to the widest header/value in that column but
+    capped at 46 characters; longer values are truncated with a trailing
+    ellipsis so a single long field (e.g. notes) can't blow out the layout.
+    """
     if not rows:
         print("  (nothing)")
         return
@@ -74,6 +100,7 @@ def parse_cmp(expr):
 # ---------------------------------------------------------------- commands
 
 def cmd_box(con, a):
+    """Print everything stored in one box: valve lots, sundry items, and bases/sockets."""
     rows = [dict(r) for r in con.execute(
         "SELECT type, qty, manufacturer, condition, function, notes "
         "FROM v_stock WHERE box=? COLLATE NOCASE ORDER BY type", (a.box,))]
@@ -94,6 +121,7 @@ def cmd_box(con, a):
 
 
 def cmd_find(con, a):
+    """Resolve a type name (and its equivalents) and print total stock plus a per-box breakdown for each match."""
     keys = resolve(con, a.type)
     if not keys:
         print(f"no type matching '{a.type}'")
@@ -117,6 +145,11 @@ def cmd_find(con, a):
 
 
 def cmd_show(con, a):
+    """Print the full reference record for a type - parameters, equivalents, datasheet path, notes - plus its stock by box.
+
+    If resolve() returns several matches (an ambiguous substring), only the
+    first is shown in full; use a more specific name to disambiguate.
+    """
     keys = resolve(con, a.type)
     if not keys:
         print(f"no type matching '{a.type}'")
@@ -147,6 +180,14 @@ def cmd_show(con, a):
 
 
 def cmd_search(con, a):
+    """Filter stock lots by function/maker/box/free-text and numeric parameter comparisons, then print the matches.
+
+    Builds the WHERE clause incrementally from whichever --options were
+    given; "1=1" is a no-op base clause so the AND-join works even when no
+    filters are supplied. Numeric filters (--heater, --pa, --va, --freq,
+    --gm, --mu) are parsed by parse_cmp() so callers can pass a bare value
+    (implicit '=') or a comparison like '>20'.
+    """
     where, args = ["1=1"], []
     if a.function:
         where.append("(LOWER(t.function) LIKE ? OR LOWER(t.typical_use) LIKE ?)")
@@ -181,6 +222,14 @@ def cmd_search(con, a):
 
 
 def cmd_add(con, a):
+    """Record a new stock lot for a type, auto-creating the valve_type record (via V.classify) if the type is unseen.
+
+    New types are inserted with confidence='inferred' since their parameters
+    come from the heuristic classifier rather than a datasheet; use 'set
+    --confirm' later once real parameters are known. The box row is
+    upserted (INSERT OR IGNORE) so an unfamiliar box still shows up in
+    box listings even before it has a real location note.
+    """
     key = V.norm(a.type)
     exists = con.execute("SELECT 1 FROM valve_type WHERE type_key=?", (key,)).fetchone()
     if not exists:
@@ -242,6 +291,14 @@ def cmd_import_csv(con, a):
 
 
 def cmd_take(con, a):
+    """Remove --qty valves of a type from stock, taking from the largest lot(s) first until satisfied or exhausted.
+
+    Only resolve()'s first match is used, so an ambiguous substring takes
+    from whichever type sorts first - pass an exact name if that matters.
+    Largest-lot-first minimises the number of lots touched (and avoids
+    leaving lots too small to be worth tracking) rather than draining lots
+    in box or date order.
+    """
     keys = resolve(con, a.type)
     if not keys:
         print("no such type")
@@ -270,6 +327,11 @@ def cmd_take(con, a):
 
 
 def cmd_move(con, a):
+    """Reassign all stock lots of a type in one box (--frm) to another box (--to).
+
+    Uses only resolve()'s first match; if that type has several lots in the
+    source box (e.g. different manufacturers) they are all moved together.
+    """
     keys = resolve(con, a.type)
     con.execute("UPDATE stock SET box=? WHERE type_key=? AND box=? COLLATE NOCASE",
                 (a.to, keys[0], a.frm))
@@ -280,6 +342,7 @@ def cmd_move(con, a):
 # ---------------------------------------------------------------- bases/sockets
 
 def cmd_bases(con, a):
+    """List base/socket stock, optionally filtered to a base-name substring and/or a box."""
     where, args = ["1=1"], []
     if a.base:
         where.append("LOWER(base) LIKE ?")
@@ -297,6 +360,7 @@ def cmd_bases(con, a):
 
 
 def cmd_sock_add(con, a):
+    """Add a lot of bases/sockets to a box (the socket-table equivalent of cmd_add)."""
     con.execute("INSERT INTO socket (base,box,qty,condition,notes) VALUES (?,?,?,?,?)",
                 (a.base.strip(), a.box, a.qty, a.condition, a.notes))
     con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.box, "attic"))
@@ -305,6 +369,7 @@ def cmd_sock_add(con, a):
 
 
 def cmd_sock_take(con, a):
+    """Remove qty bases/sockets of a given base type from stock, largest lot first (the socket-table equivalent of cmd_take)."""
     rows = list(con.execute(
         "SELECT id,box,qty FROM socket WHERE LOWER(base)=?"
         + (" AND box=? COLLATE NOCASE" if a.box else "") + " ORDER BY qty DESC",
@@ -329,6 +394,7 @@ def cmd_sock_take(con, a):
 
 
 def cmd_sock_move(con, a):
+    """Reassign all base/socket lots of one base type in a box (--frm) to another box (--to) - the socket-table equivalent of cmd_move."""
     con.execute("UPDATE socket SET box=? WHERE LOWER(base)=? AND box=? COLLATE NOCASE",
                 (a.to, a.base.lower(), a.frm))
     con.commit()
@@ -336,6 +402,12 @@ def cmd_sock_move(con, a):
 
 
 def cmd_set(con, a):
+    """Update a type's reference fields from whichever --options were supplied, leaving unset ones untouched.
+
+    Only resolve()'s first match is edited. --confirm additionally sets
+    confidence='confirmed', for recording that the parameters now come from
+    a real datasheet rather than the heuristic classifier.
+    """
     keys = resolve(con, a.type)
     if not keys:
         print("no such type")
@@ -426,6 +498,12 @@ def cmd_scan(con, a):
 
 
 def cmd_sheet(con, a):
+    """Print the local path to a type's datasheet (joined with --archive) and, if --open was given, launch it with the OS's default viewer.
+
+    If no datasheet is linked, prints links to two online datasheet
+    archives instead. --open uses 'xdg-open' outside macOS, so it is a
+    no-op on Windows.
+    """
     keys = resolve(con, a.type)
     if not keys:
         print("no such type")
@@ -443,6 +521,7 @@ def cmd_sheet(con, a):
 
 
 def cmd_gaps(con, a):
+    """Print two --limit-capped tables: in-stock types missing a datasheet, and in-stock types with no function classified - a to-do list for filling in reference data."""
     print("\ntypes held in stock with no datasheet linked:")
     rows = [dict(r) for r in con.execute("""
         SELECT t.name AS type, SUM(s.qty) qty, t.function
@@ -461,6 +540,7 @@ def cmd_gaps(con, a):
 
 
 def cmd_stats(con, a):
+    """Print a collection summary: headline counts, valves by function, and the fullest boxes."""
     q = lambda s: con.execute(s).fetchone()[0]
     print(f"\n  types            {q('SELECT COUNT(*) FROM valve_type')}")
     print(f"  stock lots       {q('SELECT COUNT(*) FROM stock')}")
@@ -485,6 +565,12 @@ def cmd_stats(con, a):
 
 
 def cmd_export(con, a):
+    """Write the full inventory to an .xlsx workbook with Stock, Types, and Other items sheets, formatted with bold headers, frozen header row, and auto-sized columns.
+
+    Text fields are truncated to 300 characters per cell to keep the file
+    manageable; column widths are sampled from the first 400 rows of each
+    column rather than the whole sheet, for speed on large tables.
+    """
     import openpyxl
     from openpyxl.styles import Font, Alignment
     wb = openpyxl.Workbook()
@@ -538,6 +624,12 @@ def cmd_export(con, a):
 # ---------------------------------------------------------------- cli
 
 def main():
+    """Entry point: set up console output, build the argparse subcommand tree, then open the DB and dispatch to the chosen cmd_*() handler.
+
+    Each subcommand's --help text and options are defined here; the actual
+    work lives in the matching cmd_*() function, wired up via
+    set_defaults(fn=...) and invoked as a.fn(con, a).
+    """
     # Let output be piped into head/less without a BrokenPipeError traceback.
     try:
         from signal import signal, SIGPIPE, SIG_DFL

@@ -7,6 +7,18 @@ below. Re-run any time the tool changes enough to make them stale:
 
 Requires reportlab (pip install reportlab) - not a runtime dependency of the
 tool itself, only needed to regenerate these PDFs.
+
+Layout of this file:
+  - styling section: a shared reportlab stylesheet (STYLES) and small helper
+    functions (title/h1/h2/h3/p/note/code/bullets/table) that wrap Platypus
+    flowable construction so the content functions below can stay readable.
+  - build(): assembles a SimpleDocTemplate from a list of flowables and
+    writes it to disk.
+  - installation_manual() / user_manual() / technical_manual(): each builds
+    and returns the full flowable list for one manual. All the actual manual
+    prose lives inside these three functions, passed as string arguments to
+    the helpers above.
+  - main(): builds all three PDFs.
 """
 import os
 
@@ -23,6 +35,10 @@ from reportlab.platypus import (
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---------------------------------------------------------------- styling
+# Shared ParagraphStyle set used by every helper below and by all three
+# manuals, built on top of reportlab's default stylesheet so headings, body
+# text, notes, code blocks, bullets, and table cells look consistent across
+# documents.
 
 _base = getSampleStyleSheet()
 
@@ -58,6 +74,8 @@ STYLES = {
 
 
 def title(text, subtitle=""):
+    """Return the flowables for a document's title block: a Title paragraph,
+    plus an optional subtitle paragraph beneath it. Used once per manual."""
     out = [Paragraph(text, STYLES["title"])]
     if subtitle:
         out.append(Paragraph(subtitle, STYLES["subtitle"]))
@@ -65,30 +83,41 @@ def title(text, subtitle=""):
 
 
 def h1(text):
+    """Top-level numbered section heading (e.g. "1. Requirements")."""
     return Paragraph(text, STYLES["h1"])
 
 
 def h2(text):
+    """Second-level heading, nested under an h1 section."""
     return Paragraph(text, STYLES["h2"])
 
 
 def h3(text):
+    """Third-level heading, nested under an h2 subsection."""
     return Paragraph(text, STYLES["h3"])
 
 
 def p(text):
+    """Standard body paragraph. text may contain reportlab's mini-HTML markup
+    (<b>, <i>, <font face="Courier">, entities) since Paragraph interprets it."""
     return Paragraph(text, STYLES["body"])
 
 
 def note(text):
+    """A callout paragraph prefixed with a bold "Note:" label and shaded
+    background, for asides that shouldn't be mistaken for main-flow text."""
     return Paragraph(f"<b>Note:</b> {text}", STYLES["note"])
 
 
 def code(text):
+    """A monospace, shaded block for literal shell commands or code, rendered
+    verbatim (no markup interpretation, unlike Paragraph-based helpers)."""
     return Preformatted(text, STYLES["code"])
 
 
 def bullets(items):
+    """A bulleted list flowable from a list of markup strings, one bullet
+    per item."""
     return ListFlowable(
         [ListItem(Paragraph(t, STYLES["bullet"]), leftIndent=6) for t in items],
         bulletType="bullet", start="\u2022", leftIndent=14, spaceAfter=10)
@@ -101,6 +130,8 @@ _TABLE_CELL_STYLE = ParagraphStyle("tcell", parent=_base["Normal"], fontSize=9, 
 
 
 def table(rows, col_widths, header=True):
+    """Build a styled Table flowable from rows of cell text (rows[0] is the
+    header row when header=True). col_widths gives each column's fixed width."""
     # Plain strings in a Table cell render as a single unwrapped line and
     # silently overflow the column - wrap everything in a Paragraph so long
     # cells actually wrap to the given column width.
@@ -124,6 +155,7 @@ def table(rows, col_widths, header=True):
 
 
 def build(filename, story):
+    """Assemble and write a SimpleDocTemplate PDF from a list of flowables."""
     doc = SimpleDocTemplate(
         os.path.join(HERE, filename), pagesize=LETTER,
         topMargin=0.85 * inch, bottomMargin=0.85 * inch,
@@ -139,6 +171,7 @@ def build(filename, story):
 # ==========================================================================
 
 def installation_manual():
+    """Return the Installation Manual's flowables."""
     s = []
     s += title("Valve Inventory", "Installation Manual")
     s.append(p(
@@ -162,10 +195,38 @@ def installation_manual():
         "Python's standard library - there is no server to install or configure."))
 
     s.append(h1("2. Getting the files"))
-    s.append(p("Two starting points:"))
-    s.append(h2("2a. You have a git clone"))
-    s.append(code("git clone <repository-url>\ncd valve-inventory"))
-    s.append(h2("2b. You were given an exported .zip"))
+    s.append(p(
+        "The repository is <font face=\"Courier\">GarethDaviesLondon/ValveInventory</font> on "
+        "GitHub: <font face=\"Courier\">https://github.com/GarethDaviesLondon/"
+        "ValveInventory</font>. Three ways to get a working copy:"))
+
+    s.append(h2("2a. Clone the repository (latest)"))
+    s.append(p("Tracks ongoing development on the main branch."))
+    s.append(code(
+        "git clone https://github.com/GarethDaviesLondon/ValveInventory.git\n"
+        "cd ValveInventory"))
+
+    s.append(h2("2b. Download a tagged release (recommended once one exists)"))
+    s.append(p(
+        "A tagged release is a known-good snapshot rather than whatever main happens to be at "
+        "the moment - the first is planned as <b>v1.0</b>. Once it's out:"))
+    s.append(bullets([
+        "<b>No git needed</b> - open "
+        "<font face=\"Courier\">https://github.com/GarethDaviesLondon/ValveInventory/"
+        "releases</font>, pick the release (e.g. v1.0), and download its "
+        "“Source code (zip)” asset under Assets. Unzip it and follow section 3 "
+        "below as normal.",
+        "<b>With git</b> - clone just that tag rather than the full history:",
+    ]))
+    s.append(code(
+        "git clone --branch v1.0 --depth 1 \\\n"
+        "    https://github.com/GarethDaviesLondon/ValveInventory.git\n"
+        "cd ValveInventory"))
+    s.append(note(
+        "No release has been tagged yet at the time of writing - until v1.0 lands, use 2a "
+        "(clone) or ask whoever gave you this manual for their own export (2c)."))
+
+    s.append(h2("2c. You were given an exported .zip"))
     s.append(p(
         "Produced by File &gt; Export archive and tools in the GUI. Just unzip it "
         "anywhere - it's not tied to git."))
@@ -241,6 +302,51 @@ def installation_manual():
          "feature."],
     ], col_widths=[2.1 * inch, 3.9 * inch]))
 
+    s.append(h1("8. Starting your own collection"))
+    s.append(p(
+        "The database that ships in this repository is the author's own stock - real box "
+        "locations in a real attic, not sample data. To make it yours instead:"))
+    s.append(h2("Option A - start empty"))
+    s.append(p(
+        "Delete the working database and launch the app; a fresh, empty one is created "
+        "automatically the moment anything tries to open it:"))
+    s.append(code("rm valves.db          # del valves.db on Windows\npython3 valves_gui.py"))
+    s.append(h2("Option B - keep the reference library, clear the stock"))
+    s.append(p(
+        "The 253 researched valve types (function, base, heater, ratings) are useful on their "
+        "own regardless of whose valves they are - keep that, wipe out the boxes and "
+        "quantities that belong to the original owner's collection:"))
+    s.append(code(
+        "python3 -c \"\n"
+        "import valvelib as V\n"
+        "con = V.init_db()\n"
+        "for t in ('stock', 'socket', 'sundry', 'box'):\n"
+        "    con.execute(f'DELETE FROM {t}')\n"
+        "con.commit()\n"
+        "n = con.execute('SELECT COUNT(*) FROM valve_type').fetchone()[0]\n"
+        "print('cleared - kept', n, 'reference types')\n\""))
+    s.append(p(
+        "Either way, run <font face=\"Courier\">python3 snapshot.py</font> afterward if you "
+        "want your own fork's <font face=\"Courier\">data/</font> to reflect the change before "
+        "committing."))
+
+    s.append(h1("9. License and disclaimer"))
+    s.append(p(
+        "MIT-licensed - see the <font face=\"Courier\">LICENSE</font> file included in this "
+        "repository. MIT is about as permissive as licenses get; its one real obligation, "
+        "keeping the copyright notice attached, is also what gives it attribution. The data "
+        "in <font face=\"Courier\">data/</font> carries its own, separate note in "
+        "<font face=\"Courier\">LICENSE</font> - some of the descriptive text there is "
+        "third-party material gathered from reference sites, not the author's to relicense."))
+    s.append(note(
+        "This software is provided without warranty of any kind, express or implied, and you "
+        "use it entirely at your own risk. It is hobbyist tooling built for one person's "
+        "attic, not a certified reference - treat every “inferred” parameter as a "
+        "lead to verify against a real datasheet, not a settled fact, especially before "
+        "relying on it for anything involving the lethal voltages a valve amplifier runs at. "
+        "By downloading, installing, or running this application, you are confirming that you "
+        "have reviewed the source for yourself and that you accept these terms."))
+
     return s
 
 
@@ -249,6 +355,7 @@ def installation_manual():
 # ==========================================================================
 
 def user_manual():
+    """Return the User Manual's flowables."""
     s = []
     s += title("Valve Inventory", "User Manual")
     s.append(p(
@@ -258,7 +365,7 @@ def user_manual():
 
     s.append(h1("Overview"))
     s.append(p(
-        "The window opens on three tabs, described below, sharing one database. Nothing you "
+        "The window opens on four tabs, described below, sharing one database. Nothing you "
         "do in one tab is hidden from the others - move stock in the Valves tab and the "
         "Browse tab's counts update the next time you search it."))
     s.append(bullets([
@@ -267,6 +374,8 @@ def user_manual():
         "valves that plug into them.",
         "<b>Browse</b> - a parametric filter across every held type, for \u201cwhat do I have "
         "that could work here\u201d questions.",
+        "<b>Repair Bench</b> - for \u201cI've got this valve out of a set I'm fixing - what is "
+        "it, and what have I got that could stand in for it?\u201d",
     ]))
 
     s.append(h1("The Valves tab"))
@@ -343,6 +452,35 @@ def user_manual():
         "reference record, datasheet/web-search buttons, and a box-by-box breakdown of "
         "exactly where and how many you hold."))
 
+    s.append(h1("The Repair Bench tab"))
+    s.append(p(
+        "The workflow for a valve pulled out of a set on the bench: type its designation "
+        "(and, optionally, which circuit stage it came from - IF amp, audio output, "
+        "rectifier, and so on), then <b>Identify</b>."))
+    s.append(h2("If it's already in your database"))
+    s.append(p(
+        "Its reference data loads straight into the form on the left. On the right, "
+        "<b>In stock now</b> shows anything you already hold of that exact type or a listed "
+        "equivalent, and <b>Possible substitutes</b> lists other held types with the same "
+        "broad function and every shared rating within 50% - the same candidate logic as the "
+        "Valves tab's Similar types, but scoped to what's actually in stock, and with a "
+        "held-quantity count. Double-click a substitute to switch the whole bench over to it, "
+        "if that turns out to be the more interesting question."))
+    s.append(h2("If it's new to you"))
+    s.append(p(
+        "<b>Open datasheet</b>, <b>RadioMuseum</b>, and <b>Web search</b> work immediately off "
+        "the typed designation, before anything is saved. <b>Copy research prompt</b> puts a "
+        "ready-to-paste prompt on the clipboard, scoped to just this one type (a faster, "
+        "single-item cousin of Tools &gt; Generate research prompt...) - paste it into Claude, "
+        "and it comes back in the same block format Apply researched data... expects."))
+    s.append(p(
+        "<b>Add to database</b> creates a bare reference record (classified from the "
+        "designation, no stock attached) so there's somewhere to save findings as you gather "
+        "them. <b>Save</b> / <b>Save + confirm</b> work exactly as in the Valves tab detail "
+        "panel - and immediately refresh the substitute list on the right using whatever you "
+        "just entered, so you can see straight away whether the parameters you found open up "
+        "any new candidates from stock."))
+
     s.append(h1("Filling in reference data"))
     s.append(p(
         "New types start out with only what the naming convention can infer - a real "
@@ -404,6 +542,7 @@ def user_manual():
 # ==========================================================================
 
 def technical_manual():
+    """Return the Technical Manual's flowables."""
     s = []
     s += title("Valve Inventory", "Technical Manual")
     s.append(p(
@@ -424,7 +563,7 @@ def technical_manual():
         ["valves.py", "Command-line front end. One cmd_* function per subcommand, dispatched "
          "via argparse."],
         ["valves_gui.py", "Tkinter desktop front end. A single App(ttk.Frame) class holding "
-         "three tabs' worth of widgets and handlers."],
+         "four tabs' worth of widgets and handlers."],
         ["build_db.py", "One-off converter from the original 38-tab spreadsheet. Already run; "
          "kept for provenance, not part of normal operation."],
         ["snapshot.py", "Writes/restores the data/ text snapshot that stands in for the "
@@ -539,6 +678,20 @@ def technical_manual():
         "faster to reason about than parallel SQL and Python category logic, and cascading "
         "dropdown options (pb_matches(..., exclude=field)) fall out of the same predicate "
         "function for free."))
+    s.append(h2("Repair Bench - composition over duplication"))
+    s.append(p(
+        "Nothing about identifying an unknown valve or proposing a substitute is new logic - "
+        "the tab (rb_* methods) is built entirely from pieces the other tabs already needed: "
+        "find_similar() for substitute candidates (reused as-is, then filtered to held_qty &gt; "
+        "0 - a substitute you don't have isn't useful mid-repair), do_open_sheet(row) / "
+        "do_lookup(site, row) for datasheet and web lookups (both already took an optional "
+        "explicit row dict rather than always reading the Valves tab's selection, precisely so "
+        "other tabs could call them), and the same bidirectional equivalents scan used by the "
+        "Valves tab's search (factored out here as rb_find_matches() rather than shared "
+        "directly, since the Valves tab version is itself embedded in a larger SQL query "
+        "builder). save_type() was split into apply_type_fields(key, field_vars, notes_widget, "
+        "confirm) plus a thin wrapper specifically so Repair Bench's Save button could reuse "
+        "the exact same validate-and-write logic against its own, separate form widgets."))
 
     s.append(h1("5. The research/import pipeline"))
     s.append(p(
@@ -649,7 +802,7 @@ def technical_manual():
         "<b>New CLI command</b> - one cmd_*(con, a) function in valves.py plus an "
         "add_parser() block; follow an existing command for the pattern.",
         "<b>New GUI tab</b> - add a _build_x_tab(root) method, call it from App.__init__ "
-        "alongside the existing three, and give it its own prefixed method names (px_*) to "
+        "alongside the existing four, and give it its own prefixed method names (px_*) to "
         "avoid colliding with the other tabs' state.",
     ]))
 
@@ -657,6 +810,7 @@ def technical_manual():
 
 
 def main():
+    """Build all three manual PDFs."""
     build("INSTALLATION_MANUAL.pdf", installation_manual())
     build("USER_MANUAL.pdf", user_manual())
     build("TECHNICAL_MANUAL.pdf", technical_manual())

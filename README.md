@@ -4,6 +4,53 @@ A SQLite database and command-line tool for the attic collection.
 **1,441 valves · 253 types · 36 boxes**, converted from the 38-tab spreadsheet
 (a handful of duplicate/dual-marked entries have since been merged).
 
+## History
+
+I built this to catalogue my own valve (vacuum tube) collection, previously
+tracked across a 38-tab spreadsheet that had outgrown what a spreadsheet
+could usefully do — particularly parametric search ("what output pentodes
+over 20W do I have?"). The database that ships with this repository
+(`data/`, restored into `valves.db`) **is my actual stock**: real box
+locations in my attic, not sample data.
+
+If you're here for your own collection rather than mine, that's exactly
+what this tool is for too — see
+[Starting your own collection](#starting-your-own-collection) below, and
+the same walkthrough in the Installation Manual (`docs/INSTALLATION_MANUAL.pdf`).
+
+## License, warranty, and risk
+
+MIT-licensed — see [LICENSE](LICENSE). MIT is about as permissive as
+licenses get; its one real obligation, keeping the copyright notice
+attached, is also what gives it attribution. (The data in `data/` carries
+its own, separate note in `LICENSE` — some of the descriptive text there is
+third-party material gathered from reference sites, not mine to relicense.)
+
+**This software is provided without warranty of any kind, express or
+implied, and you use it entirely at your own risk.** It's hobbyist tooling
+built for one person's attic, not a certified reference — treat every
+`inferred` parameter as a lead to verify against a real datasheet, not a
+settled fact, especially before relying on it for anything involving the
+lethal voltages a valve amplifier runs at.
+
+By downloading, installing, or running this application, you're confirming
+that you've reviewed the source for yourself — it's a modest, readable
+Python codebase, with no network access beyond what's documented
+(`fetch_datasheets.py`, the optional Claude-research workflow, and PyPI for
+the two optional dependencies) — and that you accept these terms.
+
+## Community
+
+This started as a fix for one person's attic, but the parametric search,
+the naming-convention classifier, and the Claude-assisted research/datasheet
+workflows are useful to anyone cataloguing valves. The hobbyist tube
+community has always run on people writing down what they know for the next
+person — a datasheet rescued from a defunct site, a base wiring diagram
+redrawn from memory, a substitution someone actually tried. If this is
+useful to you, bug reports, pull requests, and researched-parameter
+contributions are all welcome; if you extend it for a different kind of
+collection, I'd like to hear about it.
+
 ## Files
 
 | File | What it is |
@@ -36,7 +83,7 @@ python3 valves_gui.py
 
 Both front ends read and write the same `valves.db`, so use whichever suits the
 moment — the GUI for browsing and filling in datasheet figures, the CLI for
-quick lookups and scripting. Three tabs:
+quick lookups and scripting. Four tabs:
 
 ### Valves
 
@@ -75,6 +122,27 @@ operator+value pickers (`<` `=` `>`) for every numeric rating, all cascading —
 picking one narrows what the others offer. A name filter narrows the list as
 you type (`3cx`, `PL`, whatever). Click a heading to sort; double-click a
 type for a popup showing exactly which boxes hold it and how many in each.
+
+### Repair Bench
+
+For "I've got this valve out of a set I'm fixing — what is it, and what have
+I got that could stand in for it?" Type the designation (and optionally which
+circuit stage it came from), *Identify*.
+
+If it's already in your database, its reference data loads straight in, **In
+stock now** shows anything you hold of that exact type or a listed
+equivalent, and **Possible substitutes** lists other held types with the same
+function and every shared rating within 50% — the Valves tab's Similar-types
+logic, scoped to what's actually in stock. Double-click a substitute to
+switch the bench to it.
+
+If it's new to you, *Open datasheet* / *RadioMuseum* / *Web search* work
+immediately off the typed name, and *Copy research prompt* puts a
+single-type research prompt on the clipboard (same block format Apply
+researched data... expects). *Add to database* creates a bare reference
+record so there's somewhere to save what you find; *Save* / *Save + confirm*
+work exactly as the Valves tab detail panel and immediately refresh the
+substitute list with whatever you just entered.
 
 ### Tools menu
 
@@ -142,6 +210,38 @@ which writes the exports without those fields. The classifications, parameters
 and box locations — the actually useful part — are unaffected. Datasheet PDFs
 are gitignored for the same reason; anyone cloning rebuilds their own archive
 with `fetch_datasheets.py`.
+
+## Starting your own collection
+
+The database that ships here is mine. To make it yours:
+
+**Option A — start empty.** Delete the working database and launch the app;
+a fresh, empty one is created automatically:
+
+```bash
+rm valves.db          # del valves.db on Windows
+python3 valves_gui.py
+```
+
+**Option B — keep the reference library, clear the stock.** The 253
+researched valve types (function, base, heater, ratings) are useful on
+their own regardless of whose valves they are — keep that, wipe out my
+boxes and quantities:
+
+```bash
+python3 -c "
+import valvelib as V
+con = V.init_db()
+for t in ('stock', 'socket', 'sundry', 'box'):
+    con.execute(f'DELETE FROM {t}')
+con.commit()
+n = con.execute('SELECT COUNT(*) FROM valve_type').fetchone()[0]
+print('cleared - kept', n, 'reference types')
+"
+```
+
+Either way, run `python3 snapshot.py` afterward if you want your own fork's
+`data/` to reflect the change before committing.
 
 ## Command line
 

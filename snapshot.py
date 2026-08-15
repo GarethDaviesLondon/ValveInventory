@@ -33,6 +33,12 @@ SOCKET_COLS = ["id", "base", "box", "qty", "condition", "notes"]
 
 
 def write_csv(con, path, table, cols, strip=()):
+    """Dump `cols` from `table` (ordered by the first column) to a CSV at `path`.
+
+    `strip` names columns whose values are blanked out instead of written -
+    used to omit third-party descriptive text (e.g. typical_use, notes)
+    before the repo goes public.
+    """
     rows = con.execute(f"SELECT {','.join(cols)} FROM {table} ORDER BY {cols[0]}")
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, lineterminator="\n")
@@ -45,6 +51,13 @@ def write_csv(con, path, table, cols, strip=()):
 
 
 def snapshot(args):
+    """Export the database at args.db to data/*.csv plus a full data/valves.sql dump.
+
+    Writes one CSV per table (types, stock, sundry, sockets) and a SQL dump
+    that `restore()` can replay to recreate the database from scratch. When
+    args.strip_notes is set, the typical_use and notes columns are blanked
+    in the CSV exports (the SQL dump always has the full data).
+    """
     con = V.connect(args.db)
     os.makedirs(DATA, exist_ok=True)
     strip = ("typical_use", "notes") if args.strip_notes else ()
@@ -69,6 +82,11 @@ def snapshot(args):
 
 
 def restore(args):
+    """Rebuild args.db from data/valves.sql, refusing to clobber an existing db unless --force.
+
+    This is what a fresh clone runs to get a working valves.db, since the
+    binary database itself is gitignored.
+    """
     import sqlite3
     if os.path.exists(args.db) and not args.force:
         print(f"{args.db} already exists - use --force to overwrite")
@@ -91,6 +109,7 @@ def restore(args):
 
 
 def main():
+    """Parse CLI args and dispatch to restore() or snapshot() (the default)."""
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=V.DB_DEFAULT)

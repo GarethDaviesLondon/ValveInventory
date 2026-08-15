@@ -1,8 +1,21 @@
 """
 valvelib.py - shared core for the valve inventory system.
 
-Holds the database schema, type-name normalisation, and the naming-convention
-classifier that pre-fills function / heater voltage from the type designation.
+Imported by both valves.py (CLI) and valves_gui.py (GUI); nothing in this
+module is specific to either front end. It holds:
+
+- SCHEMA: the SQLite schema (tables for valve types, stock, sundries,
+  sockets and boxes, plus a convenience view), applied via executescript().
+- connect() / init_db(): open a database connection and ensure the schema
+  exists.
+- norm(): normalise a free-text type designation into a canonical lookup
+  key (valve_type.type_key).
+- classify(): given a normalised designation, guess the function, heater
+  rating and family by trying several national naming conventions in turn
+  (Mullard/Philips, British Mazda/Brimar, British GEC/Osram, American
+  RETMA, Russian), falling back to the curated KNOWN table for designations
+  that don't follow any of those schemes. Results are best-effort inferences
+  meant to be confirmed against an actual datasheet, not authoritative data.
 """
 
 import re
@@ -99,6 +112,13 @@ FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key;
 
 
 def connect(path=DB_DEFAULT):
+    """Open a SQLite connection to the inventory database.
+
+    Sets row_factory to sqlite3.Row (so results can be accessed by column
+    name) and enables foreign-key enforcement, which SQLite otherwise
+    leaves off per-connection. Does not create or migrate the schema -
+    use init_db() for that. Returns the open connection.
+    """
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
@@ -106,6 +126,13 @@ def connect(path=DB_DEFAULT):
 
 
 def init_db(path=DB_DEFAULT):
+    """Open a connection and ensure the schema exists, creating it if needed.
+
+    Runs SCHEMA via executescript(); every statement in it is idempotent
+    (CREATE TABLE/INDEX/VIEW IF NOT EXISTS), so this is safe to call on an
+    existing database - it acts as both first-run setup and a no-op check
+    on later runs. Returns the open connection.
+    """
     con = connect(path)
     con.executescript(SCHEMA)
     con.commit()
@@ -134,7 +161,11 @@ def norm(name):
 # Naming-convention classifier
 # --------------------------------------------------------------------------
 
-# Mullard/Philips (European) first letter -> heater rating
+# Mullard/Philips (European) first letter -> heater rating.
+# Each value is (heater_v, heater_a): valve types are heated either at a
+# fixed voltage (series of directly-heated/parallel types, e.g. "E" = 6.3V)
+# or a fixed current (series-string heaters wired chain-fashion, e.g. "P" =
+# 300mA) - exactly one of the pair is populated, the other is None.
 _EU_HEATER = {
     "A": (4.0, None), "B": (None, 0.18), "C": (None, 0.20),
     "D": (1.4, None), "E": (6.3, None), "F": (13.0, None),
@@ -173,6 +204,8 @@ _RU_SECTION = {
 
 # British GEC / Osram / Marconi codes: letter prefix then digits only.
 # Checked after the European code because several prefixes collide.
+# Each value is (function, heater_v); heater_v is usually None because the
+# GEC/Osram scheme doesn't encode heater rating in the type code itself.
 _GB_PREFIX = {
     "KT": ("beam tetrode (output)", 6.3),
     "DH": ("double diode triode", None),
@@ -200,6 +233,7 @@ _US_HEATER_NUMS = {5: 5.0, 6: 6.3, 7: 7.0, 12: 12.6, 25: 25.0, 26: 26.5,
 
 # Types whose designation carries no usable function code. Curated by hand
 # for the types actually held; extend as the collection grows.
+# Each value is (function, heater_v); heater_v is None where not known/fixed.
 KNOWN = {
     "6AU6":    ("RF pentode", 6.3), "6BA6": ("variable-mu RF pentode", 6.3),
     "6BW6":    ("beam tetrode (output)", 6.3), "6BW7": ("RF pentode", 6.3),
@@ -374,7 +408,11 @@ def classify(name):
                 out["heater_v"] = hv
             return out
 
-    # --- Transmitting types: 4CX250B, 3-500Z, QQV06-40, 4-125A ---
+    # --- Transmitting types: 4CX250B, 3-500Z, QQV06-40, 4-125A. norm()
+    #     strips the hyphen, so "3-500Z" arrives as "3500Z"; the second
+    #     pattern (\d+\d{3}[ZA]) just requires 4+ digits ending in Z/A,
+    #     which is enough to catch that "electrode count - anode
+    #     dissipation - suffix" shape without a stricter split. ---
     if re.match(r"^\d+CX\d+", s) or re.match(r"^\d+\d{3}[ZA]$", s):
         out["family"] = "transmitting"
         out["function"] = "power tetrode" if "CX" in s else "power triode"
@@ -387,6 +425,14 @@ def classify(name):
     return out
 
 
+# Coarse function categories for grouping/filtering in the GUI and reports.
+# Each entry is (display label, [substrings to match, case-insensitively,
+# against a valve_type.function value]). Order matters only in that the
+# first matching label wins - kept broad-to-specific isn't required here
+# since the keyword lists don't overlap. Not used by classify() itself;
+# consumed by front ends (see valves_gui.function_group()) to collapse the
+# many free-text function strings classify() can produce into a short list
+# a user can filter by.
 FUNCTION_GROUPS = [
     ("triode", ["triode"]),
     ("double triode", ["double triode", "twin triode", "dual triode"]),

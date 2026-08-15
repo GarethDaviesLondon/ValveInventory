@@ -4,6 +4,16 @@ into the normalised valves.db.
 
 Each sheet has its own column layout, so the mapping is declared explicitly
 per sheet below rather than guessed.
+
+This was run once against the original spreadsheet to create the database
+that the rest of the project has evolved from; it is not part of normal
+operation (see valves.py / valves_gui.py for that) and is kept in the repo
+only for provenance - so anyone can see exactly how the starting data was
+derived, and could reproduce it given the original .xlsx.
+
+Usage:  python3 build_db.py [path/to/StockList.xlsx] [path/to/output.db]
+Both arguments are optional and fall back to the defaults in SRC/DB below.
+Running it deletes and recreates the DB file at the given path.
 """
 
 import os
@@ -90,16 +100,18 @@ BOX_NAMES = {  # sheet title -> tidy box id
     "Box35": "35", "Box36": "36", "Loose in Own Box": "Loose",
 }
 
-QTY_OVERRIDE = {("6", "ECL80"): 75}   # "50+" -> 75, per owner
+QTY_OVERRIDE = {("6", "ECL80"): 75}   # "50+" -> 75, per owner (manual correction for one known lot)
 
 
 def cell(v):
+    """Normalize one openpyxl cell value to a stripped string ("" for empty/None)."""
     if v is None:
         return ""
     return str(v).replace("\n", " ").strip()
 
 
 def parse_qty(v):
+    """Parse a quantity cell to an int, tolerating a trailing '+' (e.g. "50+"); None if not numeric."""
     s = cell(v)
     if not s:
         return None
@@ -111,10 +123,19 @@ def parse_qty(v):
 
 
 def is_maker(s):
+    """True if `s` (letters only, uppercased) names a known manufacturer from MAKERS."""
     return re.sub(r"[^A-Z]", "", s.upper()) in MAKERS
 
 
 def main():
+    """Read every mapped sheet in the source workbook and rebuild DB from scratch.
+
+    Walks each worksheet named in LAYOUTS using its column mapping, classifies
+    each row as a valve stock lot, a sundry item, or a continuation/note row,
+    accumulates per-type info (name, equivalents, a description, extra notes),
+    consolidates duplicate lots, then writes valve_type/stock/sundry/box rows
+    and prints a summary plus anything flagged as unresolved/unidentified.
+    """
     if os.path.exists(DB):
         os.remove(DB)
     con = V.init_db(DB)
@@ -142,6 +163,8 @@ def main():
                 continue
 
             def get(i):
+                """Bounds-checked cell access: not every row is padded out to the
+                widest column used by its sheet's layout."""
                 return cell(row[i]) if i < len(row) else ""
 
             # box24 has one row shifted right by a column
@@ -167,7 +190,7 @@ def main():
                 if note_bits and last_key:
                     types.setdefault(last_key, {}).setdefault("extra", []).extend(note_bits)
                 elif note_bits and not raw_type:
-                    pass
+                    pass  # stray note text with no prior row to attach it to - drop it
                 continue
 
             # non-valve items

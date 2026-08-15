@@ -3,7 +3,15 @@
 test_smoke.py - fast checks that the pieces still fit together.
 
 Run with:  python3 test_smoke.py
-No test framework needed; exits non-zero on the first failure.
+No test framework needed (no pytest/unittest) - just a flat script of
+check()/check_true() calls run top to bottom, all failures collected and
+reported together at the end, non-zero exit if any failed. Covers, in
+order: type-name normalisation (norm()), the naming-convention classifier
+(classify()), a database round-trip through a scratch SQLite file
+(schema + insert + the v_stock view), every CLI subcommand run as a real
+subprocess against that scratch database, and (if data/ is present) the
+snapshot restore path. Deliberately does not touch the real valves.db -
+every check that needs a database uses a fresh file under tempfile.mkdtemp().
 """
 
 import os
@@ -19,11 +27,13 @@ failures = []
 
 
 def check(label, got, want):
+    """Record a failure (for the final report) if got != want."""
     if got != want:
         failures.append(f"{label}: got {got!r}, wanted {want!r}")
 
 
 def check_true(label, cond):
+    """Record a failure (for the final report) if cond is falsy."""
     if not cond:
         failures.append(label)
 

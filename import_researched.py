@@ -48,13 +48,25 @@ NUM_FIELDS = {"pins", "heater_v", "heater_a", "va_max", "pa_max", "gm", "mu", "p
 INT_FIELDS = {"pins"}
 ALL_FIELDS = ["function", "base", "pins", "heater_v", "heater_a", "va_max", "pa_max",
               "gm", "mu", "power_out", "freq_max", "typical_use", "equivalents"]
-NUM_RE = re.compile(r"-?\d+\.?\d*")
+# Negative lookbehind for a letter immediately before the digits, so a type
+# designation mentioned in an explanatory sentence ("...no source specific
+# to EC88") doesn't get misread as the field's value.
+NUM_RE = re.compile(r"(?<![A-Za-z])-?\d+\.?\d*")
 HEDGE_WORDS = ("could not", "cannot confirm", "not confirmed", "low confidence",
                "plausible", "unconfirmed", "uncertain", "not verified", "no information",
                "no data", "not found", "no source", "no datasheet")
+# A field's whole value reading as "couldn't find this" rather than an actual
+# answer - e.g. Claude writing "va_max: NOT FOUND - no reliable source
+# specific to EC88" instead of leaving the value blank as the prompt asks.
+# Treated exactly like a blank value: skip the field, don't record anything.
+NOT_FOUND_RE = re.compile(
+    r"\b(not found|no reliable source|no data\b|no information|not available|"
+    r"unknown|n/?a\b|no source|not confirmed|unconfirmed|no datasheet|"
+    r"could not (?:find|confirm|verify)|cannot (?:find|confirm|verify))\b", re.I)
 
 
 def parse_num(raw, is_int):
+    """Extract the first numeric value from `raw` using NUM_RE; return int, float, or None if absent."""
     m = NUM_RE.search(raw)
     if not m:
         return None
@@ -63,7 +75,18 @@ def parse_num(raw, is_int):
 
 
 def parse_blocks(text):
-    blocks = [b.strip("\n") for b in text.split("\n---\n") if b.strip()]
+    """Split raw research-reply text into per-type records keyed by normalized type_key.
+
+    Returns {type_key: (rec, source_url, confidence_note)} where `rec` is a
+    dict of the field values actually stated (see ALL_FIELDS) - fields left
+    blank, or whose value reads as "not found" (NOT_FOUND_RE), are omitted
+    rather than recorded. Unrecognized keys/lines are ignored.
+    """
+    # Tolerate a pasted-from-chat reply rather than a clean file: CRLF line
+    # endings, and a "---" separator with stray trailing spaces or an extra
+    # blank line around it (an exact "\n---\n" match missed those).
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    blocks = [b.strip("\n") for b in re.split(r"\n[ \t]*-{3,}[ \t]*\n", text) if b.strip()]
     records = {}
     for b in blocks:
         lines = [l for l in b.split("\n") if l.strip()]
@@ -78,7 +101,7 @@ def parse_blocks(text):
                 continue
             field, _, val = line.partition(":")
             field, val = field.strip().lower(), val.strip()
-            if not val:
+            if not val or (field != "confidence_note" and NOT_FOUND_RE.search(val)):
                 continue
             if field == "source_url":
                 source = val
@@ -95,6 +118,15 @@ def parse_blocks(text):
 
 
 def apply_records(con, records, dry_run=True):
+    """Write parsed `records` into valve_type, or just print what would change if dry_run.
+
+    For each record: skip type_keys not present in the DB (-> missing) and
+    ones with no fields beyond equivalents (-> skipped); otherwise update
+    the stated fields, append source/confidence_note to notes (prepended to
+    any existing notes), and mark confidence='confirmed' unless the
+    confidence_note reads as hedged (see HEDGE_WORDS). Returns
+    (applied, skipped, missing) lists of type_keys.
+    """
     applied, skipped, missing = [], [], []
     for key, (rec, source, conf_note) in records.items():
         row = con.execute("SELECT type_key, notes FROM valve_type WHERE type_key=?", (key,)).fetchone()
@@ -138,6 +170,7 @@ def apply_records(con, records, dry_run=True):
 
 
 def main():
+    """CLI entry point: parse the research-reply file and apply it (--yes) or preview it (default)."""
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("file")
     p.add_argument("--db", default=V.DB_DEFAULT)
@@ -145,6 +178,9 @@ def main():
     a = p.parse_args()
 
     try:
+        # Research text may contain non-ASCII (accented names, symbols); widen
+        # stdout so printing it doesn't crash on a narrower console encoding.
+        # reconfigure() is Python 3.7+; AttributeError guards older stdout wrappers.
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except AttributeError:
         pass
