@@ -2183,7 +2183,7 @@ class App(ttk.Frame):
             return
         include = ["valves.py", "valves_gui.py", "valvelib.py", "snapshot.py",
                   "fetch_datasheets.py", "build_db.py", "test_smoke.py",
-                  "import_researched.py", "upload_template.csv",
+                  "import_researched.py", "upload_template.csv", "run.bat",
                   "README.md", "QUICKSTART.md", "LICENSE"]
         try:
             with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:

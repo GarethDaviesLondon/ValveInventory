@@ -58,6 +58,7 @@ collection, I'd like to hear about it.
 | `valves.db` | The database. This is the only file that matters — back it up. |
 | `valves.py` | The command-line tool. |
 | `valves_gui.py` | The desktop window. Same database, different way in. |
+| `run.bat` | Windows: double-click to launch the desktop window without opening a terminal first. |
 | `valvelib.py` | Schema, type-name normalisation, and the code classifier. |
 | `build_db.py` | One-off converter from the original workbook. Already run. |
 | `fetch_datasheets.py` | Builds the local datasheet archive. |
