@@ -345,41 +345,29 @@ class TypeDetailWindow(tk.Toplevel):
         """Build the popup for valve_type row `t`, given its stock rows (box_rows)."""
         super().__init__(app.master)
         self.app = app
+        self.type_key = t["type_key"]
         self.row = dict(t)
         self.row["type"] = self.row["name"]
-        self.title(f"{t['name']} - reference & stock")
         self.geometry("560x560")
         self.transient(app.master)
 
         top = ttk.Frame(self, padding=(PAD, PAD, PAD, 0))
         top.pack(fill="x")
-        ttk.Label(top, text=t["name"], font=("TkDefaultFont", 14, "bold")).pack(side="left")
-        ttk.Label(top, text=f"  [{t['confidence']}]", foreground="#666").pack(side="left")
+        self.title_label = ttk.Label(top, text="", font=("TkDefaultFont", 14, "bold"))
+        self.title_label.pack(side="left")
+        self.confidence_label = ttk.Label(top, text="", foreground="#666")
+        self.confidence_label.pack(side="left")
         ttk.Button(top, text="Web search", command=lambda: self._lookup()).pack(side="right")
         ttk.Button(top, text="RadioMuseum",
                   command=lambda: self._lookup("radiomuseum.org")).pack(side="right", padx=(0, 6))
-        ttk.Button(top, text="Manage docs & links...", command=self._manage_sheets).pack(
+        ttk.Button(top, text="Manage information...", command=self._manage_sheets).pack(
             side="right", padx=(0, 6))
-        ttk.Button(top, text=app.sheet_button_label(t["datasheet_path"]),
-                  command=self._open_sheet).pack(side="right", padx=(0, 6))
+        self.sheet_btn = ttk.Button(top, text="", command=self._open_sheet)
+        self.sheet_btn.pack(side="right", padx=(0, 6))
 
-        info = tk.Text(self, height=11, wrap="word", font=("TkDefaultFont", 9),
-                       padx=PAD, pady=6, borderwidth=0, background=self.cget("background"))
-        info.pack(fill="x", padx=PAD, pady=(PAD, 0))
-        lines = []
-        for key, label, unit in DETAIL_FIELDS:
-            if t[key] is not None:
-                lines.append(f"{label:<12} {t[key]}{unit}")
-        if t["equivalents"]:
-            lines.append(f"{'Equivalents':<12} {t['equivalents']}")
-        if t["typical_use"]:
-            lines += ["", t["typical_use"]]
-        if t["notes"]:
-            lines += ["", f"Notes: {t['notes'][:600]}"]
-        if not lines:
-            lines = ["No reference data yet."]
-        info.insert("1.0", "\n".join(lines))
-        info.configure(state="disabled")
+        self.info = tk.Text(self, height=11, wrap="word", font=("TkDefaultFont", 9),
+                            padx=PAD, pady=6, borderwidth=0, background=self.cget("background"))
+        self.info.pack(fill="x", padx=PAD, pady=(PAD, 0))
 
         total = sum(r["qty"] for r in box_rows)
         ttk.Label(self, text=f"Box breakdown - {total} held across {len(box_rows)} box(es)",
@@ -400,16 +388,62 @@ class TypeDetailWindow(tk.Toplevel):
             tree.insert("", "end", values=(r["box"], r["qty"], r["manufacturer"] or "",
                                            r["condition"] or ""))
 
+        self._render(t)
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 100}+{app.master.winfo_rooty() + 80}")
+
+    def _render(self, t):
+        """(Re)fill the title, confidence, Open-datasheet label, and info
+        block from valve_type row `t` - split out from __init__ so refresh()
+        can call it again after Manage information... changes something,
+        without rebuilding the whole popup (and losing scroll position,
+        window placement, etc)."""
+        self.title(f"{t['name']} - reference & stock")
+        self.title_label.config(text=t["name"])
+        self.confidence_label.config(text=f"  [{t['confidence']}]")
+        self.sheet_btn.config(text=self.app.sheet_button_label(t["datasheet_path"]))
+
+        lines = []
+        for key, label, unit in DETAIL_FIELDS:
+            if t[key] is not None:
+                lines.append(f"{label:<12} {t[key]}{unit}")
+        if t["equivalents"]:
+            lines.append(f"{'Equivalents':<12} {t['equivalents']}")
+        if t["typical_use"]:
+            lines += ["", t["typical_use"]]
+        if t["notes"]:
+            lines += ["", f"Notes: {t['notes'][:600]}"]
+        if not lines:
+            lines = ["No reference data yet."]
+        self.info.configure(state="normal")
+        self.info.delete("1.0", "end")
+        self.info.insert("1.0", "\n".join(lines))
+        self.info.configure(state="disabled")
+
+    def refresh(self):
+        """Re-read this popup's type from the database and re-render - called
+        after Manage information... saves a parameter change or links a new
+        document, so the numbers on screen never go stale while it's open."""
+        t = self.app.con.execute("SELECT * FROM valve_type WHERE type_key=?",
+                                 (self.type_key,)).fetchone()
+        if not t:
+            return
+        self.row = dict(t)
+        self.row["type"] = self.row["name"]
+        self._render(t)
 
     def _open_sheet(self):
         """Delegate to the App's Open datasheet action for this popup's type."""
         self.app.do_open_sheet(self.row)
 
     def _manage_sheets(self):
-        DatasheetManagerDialog(self.app, self.row["type_key"], self.row["type"])
+        DatasheetManagerDialog(self.app, self.row["type_key"], self.row["type"],
+                               on_change=self.refresh)
+
+    def _lookup(self, site=None):
+        """Delegate to the App's web-lookup action for this popup's type."""
+        self.app.do_lookup(site, self.row)
 
 
 class DatasheetManagerDialog(tk.Toplevel):
@@ -422,19 +456,26 @@ class DatasheetManagerDialog(tk.Toplevel):
     Reachable from the Valves tab detail panel, the Browse tab's
     TypeDetailWindow, and the Repair Bench tab."""
 
-    def __init__(self, app, type_key, display_name):
+    def __init__(self, app, type_key, display_name, on_change=None):
         super().__init__(app.master)
         self.app = app
         self.type_key = type_key
         self.name = display_name
+        self.on_change = on_change
         self.title(f"Documents & links - {display_name}")
-        self.geometry("580x480")
+        self.geometry("580x520")
         self.transient(app.master)
 
         t = app.con.execute("SELECT datasheet_path, datasheet_url FROM valve_type WHERE type_key=?",
                             (type_key,)).fetchone()
         self._primary_path = t["datasheet_path"] if t else None
         self._primary_url = t["datasheet_url"] if t else None
+
+        paramrow = ttk.Frame(self, padding=(PAD, PAD, PAD, 0))
+        paramrow.pack(fill="x")
+        ttk.Button(paramrow, text="Edit parameters...", command=self._edit_params).pack(side="left")
+        ttk.Label(paramrow, text="  function, base, heater, Va/Pa, gm/mu, and the rest",
+                 foreground="#666").pack(side="left")
 
         top = ttk.LabelFrame(self, text='Primary - opened by "Open datasheet" everywhere', padding=PAD)
         top.pack(fill="x", padx=PAD, pady=PAD)
@@ -504,6 +545,21 @@ class DatasheetManagerDialog(tk.Toplevel):
         self._primary_path = rel
         self._refresh_primary()
         self.app.refresh_after_datasheet_change(self.type_key)
+        self._notify_change()
+
+    def _edit_params(self):
+        """Open the standalone parameter-entry form for this type - the same
+        fields and Save/Save+confirm behaviour as the Valves tab detail
+        panel, reachable here so a Browse-tab research session never has to
+        switch tabs to record what a datasheet says."""
+        EditParamsDialog(self.app, self.type_key, self.name, on_change=self._notify_change)
+
+    def _notify_change(self):
+        """Bubble a change (parameter edit, primary set, doc add/remove) up
+        to whatever opened this dialog - e.g. TypeDetailWindow.refresh() -
+        so it isn't left showing stale data while still open."""
+        if self.on_change:
+            self.on_change()
 
     def _refresh_extra(self):
         self.tree.delete(*self.tree.get_children())
@@ -535,6 +591,7 @@ class DatasheetManagerDialog(tk.Toplevel):
         self.app.con.commit()
         self._refresh_extra()
         self.app.refresh_after_datasheet_change(self.type_key)
+        self._notify_change()
 
     def _add_from_url(self):
         """A URL-only link, no local file - a datasheet page, a build thread,
@@ -578,10 +635,78 @@ class DatasheetManagerDialog(tk.Toplevel):
         self.app.con.commit()
         self._refresh_extra()
         self.app.refresh_after_datasheet_change(self.type_key)
+        self._notify_change()
 
-    def _lookup(self, site=None):
-        """Delegate to the App's web-lookup action for this popup's type."""
-        self.app.do_lookup(site, self.row)
+
+class EditParamsDialog(tk.Toplevel):
+    """Standalone parameter-entry form for one type - the same TYPE_FIELDS
+    form and Save/Save+confirm behaviour as the Valves tab detail panel and
+    the Repair Bench, just reachable from DatasheetManagerDialog's "Edit
+    parameters..." button so a Browse-tab research session never needs to
+    switch tabs to record what a datasheet says."""
+
+    def __init__(self, app, type_key, display_name, on_change=None):
+        super().__init__(app.master)
+        self.app = app
+        self.type_key = type_key
+        self.on_change = on_change
+        self.title(f"Edit parameters - {display_name}")
+        self.geometry("420x580")
+        self.transient(app.master)
+
+        self.status = ttk.Label(self, text="", foreground="#444")
+        self.status.pack(fill="x", padx=PAD, pady=(PAD, 0))
+
+        form = ttk.Frame(self, padding=PAD)
+        form.pack(fill="both", expand=True)
+        self.field_vars = {}
+        for i, (key, label, _kind) in enumerate(TYPE_FIELDS):
+            app.build_type_field_row(form, i, key, label, self.field_vars, height=3)
+        form.columnconfigure(1, weight=1)
+
+        ttk.Label(self, text="Notes", foreground="#666").pack(anchor="w", padx=PAD, pady=(0, 2))
+        self.notes = tk.Text(self, height=4, wrap="word", font=("TkDefaultFont", 9))
+        self.notes.pack(fill="x", padx=PAD, pady=(0, PAD))
+
+        btns = ttk.Frame(self, padding=(PAD, 0, PAD, PAD))
+        btns.pack(fill="x")
+        ttk.Button(btns, text="Close", command=self.destroy).pack(side="right")
+        ttk.Button(btns, text="Save + confirm", command=lambda: self._save(True)).pack(
+            side="right", padx=(0, 6))
+        ttk.Button(btns, text="Save", command=lambda: self._save(False)).pack(
+            side="right", padx=(0, 6))
+
+        self._load()
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        self.geometry(f"+{app.master.winfo_rootx() + 140}+{app.master.winfo_rooty() + 110}")
+
+    def _load(self):
+        """Fill the form from the current database row."""
+        t = self.app.con.execute("SELECT * FROM valve_type WHERE type_key=?",
+                                 (self.type_key,)).fetchone()
+        if not t:
+            return
+        for k, _l, _kind in TYPE_FIELDS:
+            set_field_value(self.field_vars[k], t[k])
+        self.notes.delete("1.0", "end")
+        self.notes.insert("1.0", t["notes"] or "")
+        self.status.config(text=f"confidence: {t['confidence']}")
+
+    def _save(self, confirm):
+        """Write the form back via the same apply_type_fields() the Valves
+        tab and Repair Bench use, then refresh every other view showing
+        this type (and whatever opened this dialog, via on_change) so nothing
+        is left stale. Stays open afterward - unlike the Valves tab panel,
+        this is a standalone popup with nothing else to fall back to showing
+        the saved state, so closing on every Save would lose that feedback."""
+        if not self.app.apply_type_fields(self.type_key, self.field_vars, self.notes, confirm):
+            return
+        self.app.refresh_after_datasheet_change(self.type_key)
+        if self.on_change:
+            self.on_change()
+        self._load()
+        self.status.config(text=f"Saved - {self.status.cget('text')}")
 
 
 # --------------------------------------------------------------------------
@@ -2384,11 +2509,14 @@ class App(ttk.Frame):
             "fetch_datasheets.py builds the archive itself from frank.pocnet.net (see README) "
             "- it's gitignored and not included when you export, so rebuild it locally or use "
             "the download prompt above.",
-            "  Manage docs & links... (next to Open datasheet) opens the full list for a type: "
-            "the one \"primary\" sheet that button opens, plus as many extra datasheets and "
-            "links as you want - a second manufacturer's sheet, a forum thread, a project that "
-            "happens to use this valve. Upload a file you already have, or paste a URL - no "
-            "download needed for a link, it's just recorded.",
+            "  Manage... (Manage information... on the Browse tab's popup, next to Open "
+            "datasheet) opens the full list for a type: the one \"primary\" sheet that button "
+            "opens, plus as many extra datasheets and links as you want - a second "
+            "manufacturer's sheet, a forum thread, a project that happens to use this valve. "
+            "Upload a file you already have, or paste a URL - no download needed for a link, "
+            "it's just recorded. Its Edit parameters... button opens the same field-entry form "
+            "as the detail panel, so a Browse-tab research session never needs to switch tabs "
+            "to record what a datasheet says.",
             "  The Docs tab holds the same idea for material that isn't about one specific "
             "type - a care-and-feeding guide, a base wiring reference. Add from file / Add "
             "from URL, a title and an optional abstract, and a filter box to find things again.",

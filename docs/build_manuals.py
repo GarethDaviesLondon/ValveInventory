@@ -422,11 +422,14 @@ def user_manual():
         "an online source - the button itself reads <i>Open datasheet (local)</i> or "
         "<i>Find datasheet (web)</i>, so which one it'll do is clear before you click. "
         "<b>RadioMuseum</b> and <b>Web search</b> run a site-scoped or general search for "
-        "whatever's selected. <b>Manage...</b> opens the full document list for a type: the "
-        "one “primary” sheet that button opens, plus as many extra datasheets and "
-        "links as you like - a second manufacturer's sheet, a forum thread, a project that "
-        "happens to use this valve. Upload a file you already have, or paste a URL (no "
-        "download needed for a link - it's just recorded)."))
+        "whatever's selected. <b>Manage...</b> (<b>Manage information...</b> on the Browse "
+        "tab's popup) opens the full document list for a type: the one “primary” sheet that "
+        "button opens, plus as many extra datasheets and links as you like - a second "
+        "manufacturer's sheet, a forum thread, a project that happens to use this valve. "
+        "Upload a file you already have, or paste a URL (no download needed for a link - "
+        "it's just recorded). Its <b>Edit parameters...</b> button opens the same field-entry "
+        "form as the detail panel, so a Browse-tab research session never needs to switch tabs "
+        "to record what a datasheet says."))
     s.append(h2("Toolbar"))
     s.append(p(
         "<b>Add stock</b> creates the type automatically if it's new, classifying it from "

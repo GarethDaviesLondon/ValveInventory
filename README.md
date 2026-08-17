@@ -111,12 +111,15 @@ quick lookups and scripting. Five tabs:
   different supply can usually cover that). Double-click one to look it up.
   *Open datasheet* / *RadioMuseum* / *Web search* look up whatever's
   selected — the button reads **Open datasheet (local)** or **Find
-  datasheet (web)** so you know which one it'll do before clicking. *Manage
-  docs & links...* opens a type's full document list: the one "primary"
-  sheet that button opens, plus as many extra datasheets and links as you
-  want (a second manufacturer's sheet, a forum thread, a project that
-  happens to use this valve) — upload a file you already have, or just
-  paste a URL.
+  datasheet (web)** so you know which one it'll do before clicking. *Manage...*
+  (labelled *Manage information...* on the Browse tab's popup) opens a
+  type's full document list: the one "primary" sheet that button opens,
+  plus as many extra datasheets and links as you want (a second
+  manufacturer's sheet, a forum thread, a project that happens to use this
+  valve) — upload a file you already have, or just paste a URL. Its
+  *Edit parameters...* button opens the same field-entry form as the detail
+  panel, so a Browse-tab research session never needs to switch tabs to
+  record what a datasheet says.
 - **Add stock / Take / Move / Delete lot** act on the selected row. *Add stock*
   creates the type automatically if it's new, classifying it as it goes.
 
