@@ -30,6 +30,7 @@ TYPE_COLS = ["type_key", "name", "function", "family", "base", "pins",
 STOCK_COLS = ["id", "type_key", "box", "qty", "manufacturer", "condition",
               "date_added", "notes"]
 SOCKET_COLS = ["id", "base", "box", "qty", "condition", "notes"]
+DOCUMENT_COLS = ["id", "type_key", "title", "abstract", "path", "url", "added"]
 
 
 def write_csv(con, path, table, cols, strip=()):
@@ -53,7 +54,7 @@ def write_csv(con, path, table, cols, strip=()):
 def snapshot(args):
     """Export the database at args.db to data/*.csv plus a full data/valves.sql dump.
 
-    Writes one CSV per table (types, stock, sundry, sockets) and a SQL dump
+    Writes one CSV per table (types, stock, sundry, sockets, documents) and a SQL dump
     that `restore()` can replay to recreate the database from scratch. When
     args.strip_notes is set, the typical_use and notes columns are blanked
     in the CSV exports (the SQL dump always has the full data).
@@ -68,6 +69,7 @@ def snapshot(args):
     write_csv(con, f"{DATA}/sundry.csv", "sundry",
               ["id", "box", "description", "qty", "notes"])
     write_csv(con, f"{DATA}/sockets.csv", "socket", SOCKET_COLS)
+    write_csv(con, f"{DATA}/documents.csv", "document", DOCUMENT_COLS)
 
     # Full SQL dump, so a clone can rebuild the database exactly.
     with open(f"{DATA}/valves.sql", "w", encoding="utf-8") as f:

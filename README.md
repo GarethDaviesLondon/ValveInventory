@@ -84,7 +84,7 @@ python3 valves_gui.py
 
 Both front ends read and write the same `valves.db`, so use whichever suits the
 moment — the GUI for browsing and filling in datasheet figures, the CLI for
-quick lookups and scripting. Four tabs:
+quick lookups and scripting. Five tabs:
 
 ### Valves
 
@@ -109,7 +109,14 @@ quick lookups and scripting. Four tabs:
   50% — not equivalents, just plausible substitutes with modification (heater
   mismatches are flagged, not filtered out, since a dropping resistor or a
   different supply can usually cover that). Double-click one to look it up.
-  *Open datasheet* / *RadioMuseum* / *Web search* look up whatever's selected.
+  *Open datasheet* / *RadioMuseum* / *Web search* look up whatever's
+  selected — the button reads **Open datasheet (local)** or **Find
+  datasheet (web)** so you know which one it'll do before clicking. *Manage
+  docs & links...* opens a type's full document list: the one "primary"
+  sheet that button opens, plus as many extra datasheets and links as you
+  want (a second manufacturer's sheet, a forum thread, a project that
+  happens to use this valve) — upload a file you already have, or just
+  paste a URL.
 - **Add stock / Take / Move / Delete lot** act on the selected row. *Add stock*
   creates the type automatically if it's new, classifying it as it goes.
 
@@ -150,6 +157,15 @@ researched data... expects). *Add to database* creates a bare reference
 record so there's somewhere to save what you find; *Save* / *Save + confirm*
 work exactly as the Valves tab detail panel and immediately refresh the
 substitute list with whatever you just entered.
+
+### Docs
+
+General reference material that isn't about one specific type — a
+care-and-feeding guide, a base wiring reference, whatever's worth keeping
+alongside the collection. *Add from file...* copies a PDF you already have
+into the local archive; *Add from URL...* just records a link. Title and an
+optional abstract for each; the abstract shows in the pane on the right when
+you select a document, and a filter box narrows the list as you type.
 
 ### Tools menu
 
@@ -242,6 +258,8 @@ python3 valves.py box 12                  # what's in box 12
 python3 valves.py find KT66               # which boxes hold KT66
 python3 valves.py show ECC83              # full reference record
 python3 valves.py stats                   # collection summary
+python3 valves.py docs --type EL34        # a type's datasheet + extra links
+python3 valves.py docs                    # the general reference library
 
 # parametric search - this is the part the spreadsheet couldn't do
 python3 valves.py search --function "output pentode" --heater 6.3

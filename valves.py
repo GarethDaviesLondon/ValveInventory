@@ -539,6 +539,38 @@ def cmd_gaps(con, a):
     print()
 
 
+def cmd_docs(con, a):
+    """List reference documents from the document table: the general
+    library (type_key IS NULL) by default, or one type's primary datasheet
+    plus its additional documents/links with --type."""
+    if a.type:
+        keys = resolve(con, a.type)
+        if not keys:
+            print(f"no type matching '{a.type}'")
+            return
+        t = con.execute("SELECT name, datasheet_path, datasheet_url FROM valve_type WHERE type_key=?",
+                        (keys[0],)).fetchone()
+        print(f"\n{t['name']}")
+        if t["datasheet_path"]:
+            print(f"  primary (local): {t['datasheet_path']}")
+        elif t["datasheet_url"]:
+            print(f"  primary (web):   {t['datasheet_url']}")
+        else:
+            print("  primary: none set")
+        print()
+        rows = [dict(r) for r in con.execute(
+            "SELECT title, path, url, added FROM document WHERE type_key=? ORDER BY id", (keys[0],))]
+        table(rows, ["title", "path", "url", "added"])
+        print()
+    else:
+        rows = [dict(r) for r in con.execute(
+            "SELECT title, path, url, added FROM document "
+            "WHERE type_key IS NULL ORDER BY title")]
+        print(f"\n{len(rows)} general reference document(s)\n")
+        table(rows, ["title", "path", "url", "added"])
+        print()
+
+
 def cmd_stats(con, a):
     """Print a collection summary: headline counts, valves by function, and the fullest boxes."""
     q = lambda s: con.execute(s).fetchone()[0]
@@ -682,6 +714,10 @@ def main():
 
     s = sub.add_parser("bases", help="list valve base/socket stock")
     s.add_argument("--base"); s.add_argument("--box"); s.set_defaults(fn=cmd_bases)
+
+    s = sub.add_parser("docs", help="list reference documents/links (general library, or --type for one valve)")
+    s.add_argument("--type", help="show one type's primary datasheet plus its extra documents/links")
+    s.set_defaults(fn=cmd_docs)
 
     s = sub.add_parser("sock-add", help="add base/socket stock")
     s.add_argument("base"); s.add_argument("--box", required=True)

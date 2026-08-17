@@ -365,7 +365,7 @@ def user_manual():
 
     s.append(h1("Overview"))
     s.append(p(
-        "The window opens on four tabs, described below, sharing one database. Nothing you "
+        "The window opens on five tabs, described below, sharing one database. Nothing you "
         "do in one tab is hidden from the others - move stock in the Valves tab and the "
         "Browse tab's counts update the next time you search it."))
     s.append(bullets([
@@ -376,6 +376,8 @@ def user_manual():
         "that could work here\u201d questions.",
         "<b>Repair Bench</b> - for \u201cI've got this valve out of a set I'm fixing - what is "
         "it, and what have I got that could stand in for it?\u201d",
+        "<b>Docs</b> - a general reference library for material that isn't about one specific "
+        "type - care-and-feeding guides, base wiring references, and the like.",
     ]))
 
     s.append(h1("The Valves tab"))
@@ -417,8 +419,14 @@ def user_manual():
         "often cover that. Double-click a suggestion to look it up."))
     s.append(p(
         "<b>Open datasheet</b> opens the local PDF if there is one, otherwise falls back to "
-        "an online source. <b>RadioMuseum</b> and <b>Web search</b> run a site-scoped or "
-        "general search for whatever's selected."))
+        "an online source - the button itself reads <i>Open datasheet (local)</i> or "
+        "<i>Find datasheet (web)</i>, so which one it'll do is clear before you click. "
+        "<b>RadioMuseum</b> and <b>Web search</b> run a site-scoped or general search for "
+        "whatever's selected. <b>Manage...</b> opens the full document list for a type: the "
+        "one “primary” sheet that button opens, plus as many extra datasheets and "
+        "links as you like - a second manufacturer's sheet, a forum thread, a project that "
+        "happens to use this valve. Upload a file you already have, or paste a URL (no "
+        "download needed for a link - it's just recorded)."))
     s.append(h2("Toolbar"))
     s.append(p(
         "<b>Add stock</b> creates the type automatically if it's new, classifying it from "
@@ -480,6 +488,19 @@ def user_manual():
         "panel - and immediately refresh the substitute list on the right using whatever you "
         "just entered, so you can see straight away whether the parameters you found open up "
         "any new candidates from stock."))
+
+    s.append(h1("The Docs tab"))
+    s.append(p(
+        "A general reference library, for material that isn't about one specific valve type - "
+        "a care-and-feeding guide for power tubes, a base wiring reference, anything worth "
+        "keeping alongside the collection. <b>Add from file...</b> copies a PDF you already "
+        "have into the local archive; <b>Add from URL...</b> just records a link, no download. "
+        "Each entry gets a title and an optional abstract - select one to read its abstract in "
+        "the pane on the right, and use the filter box to narrow the list as you type."))
+    s.append(note(
+        "The same title/abstract/file-or-URL idea also applies per type, via the Valves tab's "
+        "or Repair Bench's <b>Manage...</b> button - the difference is only whether a "
+        "document is filed against one valve type or kept in the general library."))
 
     s.append(h1("Filling in reference data"))
     s.append(p(
@@ -578,7 +599,7 @@ def technical_manual():
 
     s.append(h1("2. Database schema"))
     s.append(p(
-        "Five tables plus one convenience view, declared in "
+        "Six tables plus one convenience view, declared in "
         "<font face=\"Courier\">valvelib.SCHEMA</font> and created with "
         "<font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font> - so adding a table to the "
         "schema and re-running <font face=\"Courier\">V.init_db()</font> (which both front "
@@ -607,6 +628,19 @@ def technical_manual():
         "sundry is the general catch-all for non-valve, non-socket items (crystals, "
         "screening cans, chimneys). box holds per-box location/label notes, keyed on the "
         "same free-text box identifier used in stock and socket."))
+    s.append(h2("document - extra datasheets, links, and the general reference library"))
+    s.append(p(
+        "id, type_key (FK to valve_type, nullable), title, abstract, path, url, added. "
+        "Deliberately additive rather than a replacement for "
+        "<font face=\"Courier\">valve_type.datasheet_path</font>/"
+        "<font face=\"Courier\">datasheet_url</font>, which remain the one “primary” "
+        "sheet that every existing Open-datasheet code path already knows how to open - this "
+        "table only ever adds to that, it's never read by the primary-sheet lookup. Whether a "
+        "row is per-type or general-library is entirely down to type_key: NOT NULL puts it in "
+        "that type's “Manage...” document list (DatasheetManagerDialog), NULL puts it "
+        "in the Docs tab instead. path and url are both optional and independent - a "
+        "link-only row (path NULL) is exactly how “note a project that mentions this "
+        "valve, without downloading anything” gets recorded."))
     s.append(h2("v_stock (view)"))
     s.append(p(
         "stock LEFT JOIN valve_type, exposing the commonly-needed combined columns (type "
@@ -751,6 +785,8 @@ def technical_manual():
         ["move TYPE --frm A --to B", "Move a type between boxes."],
         ["bases [--base --box]", "List valve base/socket stock."],
         ["sock-add / sock-take / sock-move", "Same idea as add/take/move, for bases/sockets."],
+        ["docs [--type TYPE]", "List reference documents - the general library by default, or "
+         "one type's primary datasheet plus its extra documents/links with --type."],
         ["set TYPE --pa .. --va .. --confirm", "Edit a type's reference parameters; "
          "--confirm marks it confirmed."],
         ["merge SRC DST [--yes]", "Fold one type into another - moves stock, records SRC as "

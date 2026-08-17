@@ -42,6 +42,15 @@ INSERT INTO "box" VALUES('7','attic',NULL,NULL);
 INSERT INTO "box" VALUES('8','attic',NULL,NULL);
 INSERT INTO "box" VALUES('9','attic',NULL,NULL);
 INSERT INTO "box" VALUES('Loose','attic',NULL,NULL);
+CREATE TABLE document (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    type_key TEXT REFERENCES valve_type(type_key) ON UPDATE CASCADE,
+    title    TEXT NOT NULL,
+    abstract TEXT,               -- short description / what it covers
+    path     TEXT,               -- relative path into the local archive, if a copy is held
+    url      TEXT,               -- source URL, if any
+    added    TEXT
+);
 CREATE TABLE socket (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     base      TEXT NOT NULL,
@@ -778,8 +787,10 @@ SELECT s.id, s.box, s.qty, COALESCE(t.name, s.type_key) AS type,
 FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key;
 CREATE INDEX idx_socket_base ON socket(base);
 CREATE INDEX idx_socket_box  ON socket(box);
+CREATE INDEX idx_document_type ON document(type_key);
 DELETE FROM "sqlite_sequence";
 INSERT INTO "sqlite_sequence" VALUES('stock',361);
 INSERT INTO "sqlite_sequence" VALUES('sundry',4);
 INSERT INTO "sqlite_sequence" VALUES('socket',6);
+INSERT INTO "sqlite_sequence" VALUES('document',3);
 COMMIT;

@@ -12,7 +12,7 @@ Layout of this file, top to bottom:
     (read-only scrollable text popup, used for reports and the user guide),
     TypeDetailWindow (Browse tab's box-breakdown popup).
   - App(ttk.Frame): the single main-window class. It builds a ttk.Notebook
-    with four tabs, each with its own _build_*_tab() method and its own
+    with five tabs, each with its own _build_*_tab() method and its own
     family of handler methods, grouped by prefix and by a comment banner
     in this file:
       Valves tab        - plain names (run_search, load_type, save_type, ...)
@@ -20,6 +20,8 @@ Layout of this file, top to bottom:
       Browse tab        - pb_* names (parametric/faceted browser)
       Repair Bench tab  - rb_* names (identify + find substitutes + apply
                           pasted research results)
+      Docs tab          - doc_* names (general reference library - the
+                          document table's type_key IS NULL rows)
   - main(): argument parsing and Tk startup.
 
 valves_gui.py and valves.py (the CLI) both read/write the same valves.db via
@@ -32,12 +34,13 @@ import argparse
 import datetime
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tkinter as tk
 import urllib.parse
 import webbrowser
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import valvelib as V
@@ -355,7 +358,10 @@ class TypeDetailWindow(tk.Toplevel):
         ttk.Button(top, text="Web search", command=lambda: self._lookup()).pack(side="right")
         ttk.Button(top, text="RadioMuseum",
                   command=lambda: self._lookup("radiomuseum.org")).pack(side="right", padx=(0, 6))
-        ttk.Button(top, text="Open datasheet", command=self._open_sheet).pack(side="right", padx=(0, 6))
+        ttk.Button(top, text="Manage docs & links...", command=self._manage_sheets).pack(
+            side="right", padx=(0, 6))
+        ttk.Button(top, text=app.sheet_button_label(t["datasheet_path"]),
+                  command=self._open_sheet).pack(side="right", padx=(0, 6))
 
         info = tk.Text(self, height=11, wrap="word", font=("TkDefaultFont", 9),
                        padx=PAD, pady=6, borderwidth=0, background=self.cget("background"))
@@ -402,6 +408,177 @@ class TypeDetailWindow(tk.Toplevel):
         """Delegate to the App's Open datasheet action for this popup's type."""
         self.app.do_open_sheet(self.row)
 
+    def _manage_sheets(self):
+        DatasheetManagerDialog(self.app, self.row["type_key"], self.row["type"])
+
+
+class DatasheetManagerDialog(tk.Toplevel):
+    """Manage everything linked to one valve type beyond the stock record:
+    the single "primary" datasheet (valve_type.datasheet_path/datasheet_url,
+    opened everywhere by the one-click Open-datasheet button), plus any
+    number of additional entries in the document table - a second
+    manufacturer's sheet, an app note, or just a link worth keeping (a build
+    thread, a forum post, a project that happens to use this valve).
+    Reachable from the Valves tab detail panel, the Browse tab's
+    TypeDetailWindow, and the Repair Bench tab."""
+
+    def __init__(self, app, type_key, display_name):
+        super().__init__(app.master)
+        self.app = app
+        self.type_key = type_key
+        self.name = display_name
+        self.title(f"Documents & links - {display_name}")
+        self.geometry("580x480")
+        self.transient(app.master)
+
+        t = app.con.execute("SELECT datasheet_path, datasheet_url FROM valve_type WHERE type_key=?",
+                            (type_key,)).fetchone()
+        self._primary_path = t["datasheet_path"] if t else None
+        self._primary_url = t["datasheet_url"] if t else None
+
+        top = ttk.LabelFrame(self, text='Primary - opened by "Open datasheet" everywhere', padding=PAD)
+        top.pack(fill="x", padx=PAD, pady=PAD)
+        self.primary_label = ttk.Label(top, text="")
+        self.primary_label.pack(anchor="w")
+        pbtns = ttk.Frame(top)
+        pbtns.pack(fill="x", pady=(6, 0))
+        self.primary_open_btn = ttk.Button(pbtns, text="Open", command=self._open_primary)
+        self.primary_open_btn.pack(side="left")
+        ttk.Button(pbtns, text="Set primary from a file...",
+                  command=self._set_primary_from_file).pack(side="left", padx=(6, 0))
+        self._refresh_primary()
+
+        mid = ttk.LabelFrame(self, text="Additional documents & links", padding=PAD)
+        mid.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
+        addbar = ttk.Frame(mid)
+        addbar.pack(fill="x", pady=(0, 6))
+        ttk.Button(addbar, text="Add from file...", command=self._add_from_file).pack(side="left")
+        ttk.Button(addbar, text="Add from URL...", command=self._add_from_url).pack(
+            side="left", padx=(6, 0))
+        ttk.Button(addbar, text="Open", command=self._open_selected).pack(side="left", padx=(6, 0))
+        ttk.Button(addbar, text="Remove link", command=self._remove_selected).pack(
+            side="left", padx=(6, 0))
+
+        self.tree = ttk.Treeview(mid, columns=("title", "source", "added"),
+                                 show="headings", height=8)
+        for key, label, width in (("title", "Title", 220), ("source", "Source", 200),
+                                  ("added", "Added", 90)):
+            self.tree.heading(key, text=label)
+            self.tree.column(key, width=width)
+        vs = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vs.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="left", fill="y")
+        self.tree.bind("<Double-1>", lambda e: self._open_selected())
+        self._docs = {}
+        self._refresh_extra()
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        self.geometry(f"+{app.master.winfo_rootx() + 110}+{app.master.winfo_rooty() + 90}")
+
+    def _refresh_primary(self):
+        if self.app.has_local_sheet(self._primary_path):
+            self.primary_label.config(text=f"Local file: {self._primary_path}")
+            self.primary_open_btn.config(text="Open (local)")
+        elif self._primary_url:
+            self.primary_label.config(text=f"Web link only: {self._primary_url}")
+            self.primary_open_btn.config(text="Open (web)")
+        else:
+            self.primary_label.config(text="No primary datasheet set yet - falls back to a web lookup.")
+            self.primary_open_btn.config(text="Find online")
+
+    def _open_primary(self):
+        self.app.do_open_sheet({"type_key": self.type_key, "type": self.name,
+                                "datasheet_path": self._primary_path})
+
+    def _set_primary_from_file(self):
+        path = filedialog.askopenfilename(title=f"Choose the primary datasheet for {self.name}",
+                                          filetypes=[("PDF", "*.pdf"), ("All files", "*.*")])
+        if not path:
+            return
+        rel = self.app.copy_into_archive(path, self.type_key)
+        self.app.con.execute("UPDATE valve_type SET datasheet_path=? WHERE type_key=?",
+                             (rel, self.type_key))
+        self.app.con.commit()
+        self._primary_path = rel
+        self._refresh_primary()
+        self.app.refresh_after_datasheet_change(self.type_key)
+
+    def _refresh_extra(self):
+        self.tree.delete(*self.tree.get_children())
+        self._docs = {}
+        for r in self.app.con.execute(
+                "SELECT id, title, path, url, added FROM document WHERE type_key=? ORDER BY id",
+                (self.type_key,)):
+            source = r["path"] if r["path"] else (r["url"] or "")
+            self.tree.insert("", "end", iid=str(r["id"]),
+                             values=(r["title"], source, r["added"] or ""))
+            self._docs[str(r["id"])] = dict(r)
+
+    def _add_from_file(self):
+        path = filedialog.askopenfilename(title=f"Choose an additional datasheet for {self.name}",
+                                          filetypes=[("PDF", "*.pdf"), ("All files", "*.*")])
+        if not path:
+            return
+        title = simpledialog.askstring(
+            "Title", "Short title for this document:",
+            initialvalue=os.path.splitext(os.path.basename(path))[0], parent=self)
+        if title is None:
+            return
+        avoid = os.path.basename(self._primary_path) if self._primary_path else None
+        rel = self.app.copy_into_archive(path, self.type_key, avoid_name=avoid)
+        self.app.con.execute(
+            "INSERT INTO document (type_key,title,path,added) VALUES (?,?,?,?)",
+            (self.type_key, title.strip() or os.path.basename(path), rel,
+             datetime.date.today().isoformat()))
+        self.app.con.commit()
+        self._refresh_extra()
+        self.app.refresh_after_datasheet_change(self.type_key)
+
+    def _add_from_url(self):
+        """A URL-only link, no local file - a datasheet page, a build thread,
+        a project that uses this valve, anything worth noting for later."""
+        url = simpledialog.askstring("Add a link", "URL:", parent=self)
+        if not url or not url.strip():
+            return
+        title = simpledialog.askstring("Title", "Short title for this link:",
+                                       initialvalue=self.name, parent=self)
+        if title is None:
+            return
+        self.app.con.execute(
+            "INSERT INTO document (type_key,title,url,added) VALUES (?,?,?,?)",
+            (self.type_key, title.strip() or url.strip(), url.strip(),
+             datetime.date.today().isoformat()))
+        self.app.con.commit()
+        self._refresh_extra()
+        self.app.refresh_after_datasheet_change(self.type_key)
+
+    def _open_selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        d = self._docs[sel[0]]
+        if d["path"]:
+            candidate = os.path.join(self.app.archive, d["path"])
+            if os.path.exists(candidate):
+                self.app.open_file(candidate)
+                return
+        if d["url"]:
+            webbrowser.open(d["url"])
+
+    def _remove_selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        if not messagebox.askyesno("Remove link", "Remove this document link? "
+                                   "(the file itself, if any, is not deleted)", parent=self):
+            return
+        self.app.con.execute("DELETE FROM document WHERE id=?", (sel[0],))
+        self.app.con.commit()
+        self._refresh_extra()
+        self.app.refresh_after_datasheet_change(self.type_key)
+
     def _lookup(self, site=None):
         """Delegate to the App's web-lookup action for this popup's type."""
         self.app.do_lookup(site, self.row)
@@ -446,18 +623,22 @@ class App(ttk.Frame):
         bases_tab = ttk.Frame(self.nb, padding=PAD)
         browse_tab = ttk.Frame(self.nb, padding=PAD)
         bench_tab = ttk.Frame(self.nb, padding=PAD)
+        docs_tab = ttk.Frame(self.nb, padding=PAD)
         self.nb.add(valves_tab, text="Valves")
         self.nb.add(bases_tab, text="Bases / Sockets")
         self.nb.add(browse_tab, text="Browse")
         self.nb.add(bench_tab, text="Repair Bench")
+        self.nb.add(docs_tab, text="Docs")
         self._build_valves_tab(valves_tab)
         self._build_bases_tab(bases_tab)
         self._build_browse_tab(browse_tab)
         self._build_bench_tab(bench_tab)
+        self._build_docs_tab(docs_tab)
         self.refresh_boxes()
         self.run_search()
         self.run_sock_search()
         self.pb_run_search()
+        self.doc_run_search()
 
     # ---------------------------------------------------------------- chrome
 
@@ -586,9 +767,11 @@ class App(ttk.Frame):
 
         # detail
         right = ttk.Frame(panes, width=310)
+        self.sheet_btn = ttk.Button(right, text="Open datasheet", command=self.do_open_sheet)
+        self.sheet_btn.pack(fill="x", pady=(0, 4))
         sheetbar = ttk.Frame(right)
         sheetbar.pack(fill="x", pady=(0, PAD))
-        ttk.Button(sheetbar, text="Open datasheet", command=self.do_open_sheet).pack(side="right")
+        ttk.Button(sheetbar, text="Manage...", command=self.do_manage_sheets).pack(side="right")
         ttk.Button(sheetbar, text="RadioMuseum",
                   command=lambda: self.do_lookup("radiomuseum.org")).pack(side="right", padx=(0, 6))
         ttk.Button(sheetbar, text="Web search",
@@ -788,7 +971,8 @@ class App(ttk.Frame):
         left = self.make_scrollable(left_container)
         idbar = ttk.Frame(left)
         idbar.pack(fill="x")
-        ttk.Button(idbar, text="Open datasheet", command=self.rb_open_sheet).pack(side="left")
+        self.rb_sheet_btn = ttk.Button(idbar, text="Open datasheet", command=self.rb_open_sheet)
+        self.rb_sheet_btn.pack(side="left")
         ttk.Button(idbar, text="RadioMuseum",
                   command=lambda: self.rb_lookup_web("radiomuseum.org")).pack(side="left", padx=(6, 0))
         ttk.Button(idbar, text="Web search", command=lambda: self.rb_lookup_web()).pack(
@@ -809,6 +993,8 @@ class App(ttk.Frame):
         self.rb_download_btn = ttk.Button(dlrow, text="Download PDF",
                                           command=self.rb_download_sheet)
         self.rb_download_btn.pack(side="left")
+        ttk.Button(dlrow, text="Manage...", command=self.rb_manage_sheets).pack(
+            side="left", padx=(6, 0))
 
         form = ttk.Frame(left)
         form.pack(fill="x", pady=(PAD, 0))
@@ -873,6 +1059,66 @@ class App(ttk.Frame):
         self.rb_suggest_tree.tag_configure("heater_diff", foreground="#8a3d00")
         self.rb_suggest_tree.bind("<Double-1>", lambda e: self.rb_pick_suggestion())
         panes.add(right, weight=1)
+
+    def _build_docs_tab(self, root):
+        """General reference library - documents.type_key IS NULL rows, not
+        tied to any one valve type (a base-wiring reference, "care and
+        feeding of power tubes", and the like)."""
+        ttk.Label(root, foreground="#555", wraplength=1100, text=
+            "General reference material - not tied to one valve type. Care-and-feeding guides, "
+            "base wiring references, anything worth keeping alongside the collection.").pack(
+            anchor="w", pady=(0, PAD))
+
+        bar = ttk.Frame(root)
+        bar.pack(fill="x", pady=(0, 6))
+        ttk.Button(bar, text="Add from file...", command=self.doc_add_from_file).pack(side="left")
+        ttk.Button(bar, text="Add from URL...", command=self.doc_add_from_url).pack(
+            side="left", padx=(6, 0))
+        ttk.Button(bar, text="Open", command=self.doc_open_selected).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Edit title/about...", command=self.doc_edit_selected).pack(
+            side="left", padx=(6, 0))
+        ttk.Button(bar, text="Remove", command=self.doc_remove_selected).pack(
+            side="left", padx=(6, 0))
+
+        filt = ttk.Frame(root)
+        filt.pack(fill="x", pady=(0, PAD))
+        ttk.Label(filt, text="Filter").pack(side="left")
+        self.doc_filter = tk.StringVar()
+        e = ttk.Entry(filt, textvariable=self.doc_filter, width=30)
+        e.pack(side="left", padx=(4, 0))
+        e.bind("<KeyRelease>", lambda ev: self.doc_run_search())
+
+        panes = ttk.PanedWindow(root, orient="horizontal")
+        panes.pack(fill="both", expand=True)
+
+        left = ttk.Frame(panes)
+        self.doc_tree = ttk.Treeview(left, columns=("title", "source", "added"),
+                                     show="headings", height=16)
+        for key, label, width in (("title", "Title", 260), ("source", "Source", 170),
+                                  ("added", "Added", 90)):
+            self.doc_tree.heading(key, text=label, command=lambda k=key: self.doc_sort(k))
+            self.doc_tree.column(key, width=width)
+        vs = ttk.Scrollbar(left, orient="vertical", command=self.doc_tree.yview)
+        self.doc_tree.configure(yscrollcommand=vs.set)
+        self.doc_tree.grid(row=0, column=0, sticky="nsew")
+        vs.grid(row=0, column=1, sticky="ns")
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+        self.doc_tree.bind("<<TreeviewSelect>>", lambda e: self.doc_show_abstract())
+        self.doc_tree.bind("<Double-1>", lambda e: self.doc_open_selected())
+        panes.add(left, weight=2)
+
+        right = ttk.Frame(panes, padding=(PAD, 0, 0, 0))
+        ttk.Label(right, text="About / abstract", foreground="#666").pack(anchor="w")
+        self.doc_abstract = tk.Text(right, wrap="word", height=20, font=("TkDefaultFont", 9))
+        self.doc_abstract.pack(fill="both", expand=True)
+        self.doc_abstract.configure(state="disabled")
+        panes.add(right, weight=1)
+
+        self.doc_status = ttk.Label(root, text="", anchor="w", foreground="#444")
+        self.doc_status.pack(fill="x", pady=(PAD, 0))
+        self.doc_rows = []
+        self.doc_sort_state = {}
 
     # ---------------------------------------------------------------- data
 
@@ -1149,7 +1395,9 @@ class App(ttk.Frame):
         if not t:
             self.detail_title.config(text=key)
             self.detail_sub.config(text="no reference record")
+            self.sheet_btn.config(text="Find datasheet (web)")
             return
+        self.sheet_btn.config(text=self.sheet_button_label(t["datasheet_path"]))
         held = self.con.execute("SELECT COALESCE(SUM(qty),0) c FROM stock WHERE type_key=?",
                                 (key,)).fetchone()["c"]
         boxes = [str(x["box"]) for x in self.con.execute(
@@ -1410,6 +1658,72 @@ class App(ttk.Frame):
         self.refresh_boxes()
         self.run_search()
 
+    def open_file(self, path):
+        """Open a local file with the OS default application."""
+        if sys.platform == "darwin":
+            subprocess.run(["open", path], check=False)
+        elif os.name == "nt":
+            os.startfile(path)  # noqa
+        else:
+            subprocess.run(["xdg-open", path], check=False)
+
+    def has_local_sheet(self, datasheet_path):
+        """True if `datasheet_path` (a valve_type.datasheet_path value)
+        points at a file that actually exists in the local archive right
+        now - the archive is gitignored/not exported, so this can be false
+        even for a type that has a path recorded."""
+        return bool(datasheet_path) and os.path.exists(os.path.join(self.archive, datasheet_path))
+
+    def sheet_button_label(self, datasheet_path):
+        """Button text for the Open-datasheet action, so it's clear before
+        clicking whether it'll open a local file or fall back to a web
+        lookup - used everywhere that button appears."""
+        return "Open datasheet (local)" if self.has_local_sheet(datasheet_path) else "Find datasheet (web)"
+
+    def copy_into_archive(self, src_path, type_key, avoid_name=None):
+        """Copy an externally-supplied file into the local datasheet
+        archive under datasheets/<first letter>/, picking a filename that
+        won't collide with an existing file (or `avoid_name`, typically the
+        primary sheet's own filename). Returns the archive-relative path,
+        suitable for datasheet_path or document.path."""
+        subdir = type_key[0] if type_key and type_key[0].isalnum() else "_"
+        folder = os.path.join(self.archive, subdir)
+        os.makedirs(folder, exist_ok=True)
+        ext = os.path.splitext(src_path)[1] or ".pdf"
+        base = type_key or os.path.splitext(os.path.basename(src_path))[0]
+        candidate = f"{base}{ext}"
+        taken = {avoid_name} if avoid_name else set()
+        n = 2
+        while os.path.exists(os.path.join(folder, candidate)) or candidate in taken:
+            candidate = f"{base}-{n}{ext}"
+            n += 1
+        dest = os.path.join(folder, candidate)
+        shutil.copy2(src_path, dest)
+        return os.path.relpath(dest, self.archive)
+
+    def refresh_after_datasheet_change(self, type_key):
+        """After linking or replacing a type's primary/extra datasheet,
+        refresh whichever tab happens to be showing it so button labels and
+        the has-datasheet filter reflect the change immediately."""
+        if self.current_type == type_key:
+            self.load_type(type_key)
+        if self.rb_current_key == type_key:
+            t = self.con.execute("SELECT * FROM valve_type WHERE type_key=?", (type_key,)).fetchone()
+            if t:
+                self.rb_load_form(t, t["name"])
+        self.run_search()
+        self.pb_run_search()
+
+    def do_manage_sheets(self):
+        """Open the multi-datasheet manager for the Valves tab's currently
+        selected type."""
+        if not self.current_type:
+            self.set_status("select a row first")
+            return
+        t = self.con.execute("SELECT name FROM valve_type WHERE type_key=?",
+                             (self.current_type,)).fetchone()
+        DatasheetManagerDialog(self, self.current_type, t["name"] if t else self.current_type)
+
     def do_open_sheet(self, row=None):
         """Open the datasheet for `row` (or the current selection): a
         locally downloaded copy if one exists, else an online lookup URL
@@ -1418,19 +1732,10 @@ class App(ttk.Frame):
         if not r:
             self.set_status("select a row first")
             return
-        path = None
-        if r["datasheet_path"]:
-            candidate = os.path.join(self.archive, r["datasheet_path"])
-            if os.path.exists(candidate):
-                path = candidate
-        if path:
+        if self.has_local_sheet(r["datasheet_path"]):
+            path = os.path.join(self.archive, r["datasheet_path"])
             try:
-                if sys.platform == "darwin":
-                    subprocess.run(["open", path], check=False)
-                elif os.name == "nt":
-                    os.startfile(path)  # noqa
-                else:
-                    subprocess.run(["xdg-open", path], check=False)
+                self.open_file(path)
                 self.set_status(f"opened {r['datasheet_path']}")
             except Exception as e:
                 self.set_status(f"could not open: {e}")
@@ -1547,12 +1852,14 @@ class App(ttk.Frame):
             # a direct .pdf URL is downloadable as-is; anything else (a
             # RadioMuseum page, say) is still worth having ready to paste over.
             self.rb_sheet_url.set(t["datasheet_url"] or "")
+            self.rb_sheet_btn.config(text=self.sheet_button_label(t["datasheet_path"]))
             notes_text = t["notes"] or ""
         else:
             inf = V.classify(typed_name)
             for k, _l, _kind in TYPE_FIELDS:
                 set_field_value(self.rb_field_vars[k], inf.get(k))
             self.rb_sheet_url.set("")
+            self.rb_sheet_btn.config(text="Find datasheet (web)")
             notes_text = ""
         if not notes_text and role:
             notes_text = f"Found in: {role}, {datetime.date.today().isoformat()}\n"
@@ -1703,6 +2010,20 @@ class App(ttk.Frame):
                              (key,)).fetchone()
         self.do_open_sheet({"type_key": key, "type": name,
                             "datasheet_path": t["datasheet_path"] if t else None})
+
+    def rb_manage_sheets(self):
+        """Open the multi-datasheet manager for the current Repair Bench
+        type - requires it to already be in the database (Add to database
+        first), since the manager writes to valve_type/document."""
+        if not self.rb_current_key:
+            self.rb_status.config(text="look up or add a type first")
+            return
+        if not self.con.execute("SELECT 1 FROM valve_type WHERE type_key=?",
+                                (self.rb_current_key,)).fetchone():
+            self.rb_status.config(text='not in your database yet - click "Add to database" first')
+            return
+        name = self.rb_name.get().strip() or self.rb_current_key
+        DatasheetManagerDialog(self, self.rb_current_key, name)
 
     def rb_lookup_web(self, site=None):
         """Open a web search for the current Repair Bench type - thin
@@ -1996,7 +2317,7 @@ class App(ttk.Frame):
         body = "\n".join([
             "VALVE INVENTORY - USER GUIDE", "",
             "Two front ends sharing one database: this window, and valves.py on the command "
-            "line. Four tabs here - Valves, Bases / Sockets, Browse, Repair Bench.",
+            "line. Five tabs here - Valves, Bases / Sockets, Browse, Repair Bench, Docs.",
             "",
             "ADDING STOCK", "",
             "  One at a time    \"Add stock\" (Valves tab) / \"Add\" (Bases-Sockets tab). "
@@ -2057,10 +2378,20 @@ class App(ttk.Frame):
             "DATASHEETS", "",
             "  Double-click a row, or \"Open datasheet\", opens the local PDF if there is one, "
             "otherwise falls back to a web lookup (RadioMuseum / Web search do the same, "
-            "scoped to that site). Tools > Scan datasheet archive links newly-added PDF files "
-            "in by filename. fetch_datasheets.py builds the archive itself from "
-            "frank.pocnet.net (see README) - it's gitignored and not included when you "
-            "export, so rebuild it locally or use the download prompt above.",
+            "scoped to that site). The button itself says which it'll do - \"Open datasheet "
+            "(local)\" or \"Find datasheet (web)\" - before you click it. Tools > Scan "
+            "datasheet archive links newly-added PDF files in by filename. "
+            "fetch_datasheets.py builds the archive itself from frank.pocnet.net (see README) "
+            "- it's gitignored and not included when you export, so rebuild it locally or use "
+            "the download prompt above.",
+            "  Manage docs & links... (next to Open datasheet) opens the full list for a type: "
+            "the one \"primary\" sheet that button opens, plus as many extra datasheets and "
+            "links as you want - a second manufacturer's sheet, a forum thread, a project that "
+            "happens to use this valve. Upload a file you already have, or paste a URL - no "
+            "download needed for a link, it's just recorded.",
+            "  The Docs tab holds the same idea for material that isn't about one specific "
+            "type - a care-and-feeding guide, a base wiring reference. Add from file / Add "
+            "from URL, a title and an optional abstract, and a filter box to find things again.",
             "",
             "BACKUP & VERSION CONTROL", "",
             "  valves.db is the live database - gitignored, since it's binary and can't be "
@@ -2758,6 +3089,170 @@ class App(ttk.Frame):
             "SELECT box, qty, manufacturer, condition FROM stock WHERE type_key=? "
             "ORDER BY CAST(box AS INTEGER), box", (key,))]
         TypeDetailWindow(self, dict(t), rows)
+
+    # ---------------------------------------------------------------- docs
+
+    def doc_run_search(self, *_a):
+        """Reload the Docs tab's list - documents.type_key IS NULL rows,
+        optionally narrowed by the filter box (title/abstract substring)."""
+        q = self.doc_filter.get().strip().lower()
+        where, args = ["type_key IS NULL"], []
+        if q:
+            where.append("(LOWER(title) LIKE ? OR LOWER(COALESCE(abstract,'')) LIKE ?)")
+            args += [f"%{q}%", f"%{q}%"]
+        self.doc_rows = [dict(r) for r in self.con.execute(
+            f"SELECT * FROM document WHERE {' AND '.join(where)} ORDER BY title", args)]
+        self.doc_populate()
+
+    def doc_populate(self):
+        """Refresh the Docs tab treeview and abstract pane from self.doc_rows."""
+        self.doc_tree.delete(*self.doc_tree.get_children())
+        for r in self.doc_rows:
+            source = r["path"] or r["url"] or ""
+            self.doc_tree.insert("", "end", iid=str(r["id"]),
+                                 values=(r["title"], source, r["added"] or ""))
+        self.doc_status.config(text=f"{len(self.doc_rows)} document(s)")
+        self.doc_show_abstract()
+
+    def doc_sort(self, key):
+        """Sort the Docs tab by clicking a column heading, toggling direction on repeat clicks."""
+        asc = not self.doc_sort_state.get(key, False)
+        self.doc_sort_state = {key: asc}
+        self.doc_rows.sort(key=lambda r: (r.get(key) or "").lower(), reverse=not asc)
+        self.doc_populate()
+
+    def doc_selected(self):
+        """The Docs tab's currently-selected row, or None."""
+        sel = self.doc_tree.selection()
+        if not sel:
+            return None
+        return next((r for r in self.doc_rows if str(r["id"]) == sel[0]), None)
+
+    def doc_show_abstract(self):
+        """Show the selected document's abstract in the read-only side pane."""
+        self.doc_abstract.configure(state="normal")
+        self.doc_abstract.delete("1.0", "end")
+        r = self.doc_selected()
+        if r:
+            self.doc_abstract.insert("1.0", r["abstract"] or "(no abstract recorded)")
+        self.doc_abstract.configure(state="disabled")
+
+    def ask_doc_details(self, default_title, ask_url=False):
+        """Small modal collecting a title/abstract (and, for the add-from-URL
+        flow, a URL) for a new library document. Returns None if cancelled
+        or no title was given."""
+        fields = [("title", "Title", default_title, str), ("abstract", "About / abstract", "", str)]
+        if ask_url:
+            fields.append(("url", "URL", "", str))
+        d = FormDialog(self.master, "Document details", fields, ok_label="Add")
+        if not d.result or not (d.result.get("title") or "").strip():
+            return None
+        out = {"title": d.result["title"].strip(), "abstract": d.result.get("abstract")}
+        if ask_url:
+            url = (d.result.get("url") or "").strip()
+            if not url:
+                messagebox.showerror("URL required", "Enter a URL.")
+                return None
+            out["url"] = url
+        return out
+
+    def doc_add_from_file(self):
+        """Copy a local file into the archive and record it as a general
+        (not type-specific) reference document."""
+        path = filedialog.askopenfilename(title="Choose a reference document",
+                                          filetypes=[("PDF", "*.pdf"), ("All files", "*.*")])
+        if not path:
+            return
+        d = self.ask_doc_details(os.path.splitext(os.path.basename(path))[0])
+        if d is None:
+            return
+        # No type_key for a general document - copy_into_archive falls back
+        # to the source file's own name and files it under datasheets/_/.
+        rel = self.copy_into_archive(path, None)
+        self.con.execute("INSERT INTO document (title,abstract,path,added) VALUES (?,?,?,?)",
+                         (d["title"], d["abstract"], rel, datetime.date.today().isoformat()))
+        self.con.commit()
+        self.doc_run_search()
+
+    def doc_add_from_url(self):
+        """Record a general reference document as a link only, no local copy."""
+        d = self.ask_doc_details("", ask_url=True)
+        if d is None:
+            return
+        self.con.execute("INSERT INTO document (title,abstract,url,added) VALUES (?,?,?,?)",
+                         (d["title"], d["abstract"], d["url"], datetime.date.today().isoformat()))
+        self.con.commit()
+        self.doc_run_search()
+
+    def doc_open_selected(self):
+        """Open the selected library document - the local copy if there is
+        one, else its URL."""
+        r = self.doc_selected()
+        if not r:
+            self.doc_status.config(text="select a document first")
+            return
+        if r["path"]:
+            candidate = os.path.join(self.archive, r["path"])
+            if os.path.exists(candidate):
+                self.open_file(candidate)
+                self.doc_status.config(text=f"opened {r['path']}")
+                return
+        if r["url"]:
+            webbrowser.open(r["url"])
+            self.doc_status.config(text=f"opened {r['url']}")
+            return
+        self.doc_status.config(text="no file or URL recorded for this document")
+
+    def doc_remove_selected(self):
+        """Delete the selected document's database row (not the underlying file, if any)."""
+        r = self.doc_selected()
+        if not r:
+            return
+        if not messagebox.askyesno("Remove document", f"Remove \"{r['title']}\" from the library? "
+                                   "(the file itself, if any, is not deleted)"):
+            return
+        self.con.execute("DELETE FROM document WHERE id=?", (r["id"],))
+        self.con.commit()
+        self.doc_run_search()
+
+    def doc_edit_selected(self):
+        """Open a small editor for the selected document's title and abstract."""
+        r = self.doc_selected()
+        if not r:
+            return
+        win = tk.Toplevel(self.master)
+        win.title(f"Edit - {r['title']}")
+        win.geometry("480x360")
+        win.transient(self.master)
+        ttk.Label(win, text="Title", foreground="#666").pack(anchor="w", padx=PAD, pady=(PAD, 2))
+        title_var = tk.StringVar(value=r["title"])
+        ttk.Entry(win, textvariable=title_var).pack(fill="x", padx=PAD)
+        ttk.Label(win, text="About / abstract", foreground="#666").pack(
+            anchor="w", padx=PAD, pady=(PAD, 2))
+        body = ttk.Frame(win)
+        body.pack(fill="both", expand=True, padx=PAD)
+        txt = tk.Text(body, wrap="word", font=("TkDefaultFont", 9))
+        sb = ttk.Scrollbar(body, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        txt.pack(side="left", fill="both", expand=True)
+        sb.pack(side="left", fill="y")
+        txt.insert("1.0", r["abstract"] or "")
+
+        def save():
+            title = title_var.get().strip()
+            if not title:
+                messagebox.showerror("Title required", "Enter a title.", parent=win)
+                return
+            self.con.execute("UPDATE document SET title=?, abstract=? WHERE id=?",
+                             (title, txt.get("1.0", "end").strip() or None, r["id"]))
+            self.con.commit()
+            win.destroy()
+            self.doc_run_search()
+
+        btns = ttk.Frame(win, padding=PAD)
+        btns.pack(fill="x")
+        ttk.Button(btns, text="Cancel", command=win.destroy).pack(side="right")
+        ttk.Button(btns, text="Save", command=save).pack(side="right", padx=(0, 6))
 
 
 def main():

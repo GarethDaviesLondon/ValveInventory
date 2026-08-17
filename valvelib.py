@@ -96,10 +96,30 @@ CREATE TABLE IF NOT EXISTS box (
     notes    TEXT
 );
 
+-- Reference documents. Two uses of the same row shape, told apart by
+-- whether type_key is set:
+--   * type_key NOT NULL - an extra datasheet for that type, beyond the one
+--     "primary" sheet valve_type.datasheet_path/datasheet_url already
+--     covers (kept as-is so the existing one-click Open datasheet flow is
+--     unchanged - this table is for the *additional* ones, e.g. a second
+--     manufacturer's sheet, or an app note).
+--   * type_key NULL - general reference material not tied to one type, e.g.
+--     "Care and feeding of power tubes" - shown in the Docs tab instead.
+CREATE TABLE IF NOT EXISTS document (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    type_key TEXT REFERENCES valve_type(type_key) ON UPDATE CASCADE,
+    title    TEXT NOT NULL,
+    abstract TEXT,               -- short description / what it covers
+    path     TEXT,               -- relative path into the local archive, if a copy is held
+    url      TEXT,               -- source URL, if any
+    added    TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_stock_type ON stock(type_key);
 CREATE INDEX IF NOT EXISTS idx_stock_box  ON stock(box);
 CREATE INDEX IF NOT EXISTS idx_socket_base ON socket(base);
 CREATE INDEX IF NOT EXISTS idx_socket_box  ON socket(box);
+CREATE INDEX IF NOT EXISTS idx_document_type ON document(type_key);
 
 -- Convenience view: stock joined to its type reference data.
 CREATE VIEW IF NOT EXISTS v_stock AS
