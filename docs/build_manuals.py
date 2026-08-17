@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-build_manuals.py - generates the three PDF manuals in docs/ from the content
+build_manuals.py - generates the four PDF manuals in docs/ from the content
 below. Re-run any time the tool changes enough to make them stale:
 
     python3 docs/build_manuals.py
@@ -14,11 +14,13 @@ Layout of this file:
     flowable construction so the content functions below can stay readable.
   - build(): assembles a SimpleDocTemplate from a list of flowables and
     writes it to disk.
-  - installation_manual() / user_manual() / technical_manual(): each builds
-    and returns the full flowable list for one manual. All the actual manual
-    prose lives inside these three functions, passed as string arguments to
-    the helpers above.
-  - main(): builds all three PDFs.
+  - installation_manual() / user_manual() / technical_manual() /
+    upgrade_guide(): each builds and returns the full flowable list for one
+    manual. All the actual manual prose lives inside these four functions,
+    passed as string arguments to the helpers above. upgrade_guide() in
+    particular is meant to be kept current - add a "Version-specific notes"
+    entry whenever a release needs anything beyond the standard procedure.
+  - main(): builds all four PDFs.
 """
 import os
 
@@ -177,7 +179,10 @@ def installation_manual():
     s.append(p(
         "This covers getting the tool running from nothing - whether you're setting it up "
         "for the first time, or you were handed an exported copy by someone else (see "
-        "File &gt; Export archive and tools in the app, or QUICKSTART.md)."))
+        "File &gt; Export archive and tools in the app, or QUICKSTART.md). "
+        "<b>Already have an installation and moving to a newer version instead? See the "
+        "Upgrade Guide, not this document</b> - the procedure for keeping your existing "
+        "collection is different from a from-scratch setup."))
 
     s.append(h1("1. Requirements"))
     s.append(bullets([
@@ -848,11 +853,121 @@ def technical_manual():
     return s
 
 
+# ==========================================================================
+# UPGRADE GUIDE
+# ==========================================================================
+
+def upgrade_guide():
+    """Return the Upgrade Guide's flowables."""
+    s = []
+    s += title("Valve Inventory", "Upgrade Guide")
+    s.append(p(
+        "How to move from an older installed version to a newer one - say, v1.2 to v1.3 - "
+        "without losing anything you've added. This is a living document: the general "
+        "procedure below applies to every release so far and is expected to keep applying, "
+        "but check “Version-specific notes” at the end for anything a particular "
+        "release calls out as different."))
+
+    s.append(h1("The short answer"))
+    s.append(p(
+        "<b>No, it isn't export-and-reimport.</b> All of your data - stock, box locations, "
+        "confirmed parameters, everything - lives in one file, "
+        "<font face=\"Courier\">valves.db</font>, and upgrading never touches that file "
+        "directly. Back it up (below), get the new version's code, and run it against your "
+        "existing database. That's the whole procedure."))
+    s.append(note(
+        "This works because every schema change so far has been strictly additive - new "
+        "tables only, created with <font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font>, "
+        "never a renamed or removed column. The app rebuilds its schema against your existing "
+        "database on every single startup (<font face=\"Courier\">V.init_db()</font>) - on an "
+        "up-to-date database that's a no-op; on one from an older version, it just adds "
+        "whatever tables are new, in place, and leaves everything already there untouched."))
+
+    s.append(h1("1. Back up first - always"))
+    s.append(p("Do this before touching anything else. Two options, and it's fine to do both:"))
+    s.append(h2("Copy the file (fastest, most robust)"))
+    s.append(p(
+        "Copy <font face=\"Courier\">valves.db</font> itself to somewhere safe - another "
+        "folder, a dated backup folder, cloud storage, a USB stick. If you've built a local "
+        "datasheet archive, copy the <font face=\"Courier\">datasheets/</font> folder too "
+        "(optional - it's rebuildable, just slower to redo than to copy)."))
+    s.append(h2("Refresh the text snapshot"))
+    s.append(code("python3 snapshot.py"))
+    s.append(p(
+        "Writes a human-readable copy into <font face=\"Courier\">data/</font> - good to have "
+        "regardless, and if you track your own fork in git, commit it so you have real "
+        "version history of your collection, not just a single backup snapshot."))
+
+    s.append(h1("2. Get the new version"))
+    s.append(h2("If you're on a git clone"))
+    s.append(code(
+        "git fetch --tags\n"
+        "git checkout v1.3          # or: git pull, to track main instead of a tag"))
+    s.append(p(
+        "<font face=\"Courier\">valves.db</font> is gitignored, so neither command touches "
+        "it - only the code and docs update. Nothing further to do for the database itself."))
+    s.append(h2("If you're using a downloaded copy (no git)"))
+    s.append(p(
+        "Download the new release and extract it to a <b>new</b> folder - don't extract "
+        "over the old one. Then copy your existing <font face=\"Courier\">valves.db</font> "
+        "(and <font face=\"Courier\">datasheets/</font>, if you have one, and anything under "
+        "<font face=\"Courier\">docs/screenshots/</font> you added yourself) from the old "
+        "folder into the new one."))
+
+    s.append(h1("3. Run it"))
+    s.append(code("python3 valves_gui.py"))
+    s.append(p(
+        "First launch against the upgraded code creates any new tables the new version needs, "
+        "against your existing data, automatically. You should see your full collection "
+        "immediately - same counts, same boxes, same confirmed parameters."))
+
+    s.append(h1("4. Confirm nothing's missing"))
+    s.append(code("python3 test_smoke.py"))
+    s.append(p(
+        "Then Tools &gt; Collection summary (or "
+        "<font face=\"Courier\">python3 valves.py stats</font>) and check the totals match "
+        "what you expect. If anything looks off, your backup from step 1 is right there."))
+    s.append(p(
+        "Optionally, refresh the snapshot again now that you're upgraded, so "
+        "<font face=\"Courier\">data/</font> reflects the current version's schema too:"))
+    s.append(code("python3 snapshot.py"))
+
+    s.append(h1("What not to do"))
+    s.append(note(
+        "Don't run <font face=\"Courier\">snapshot.py --restore</font> as part of upgrading. "
+        "That rebuilds <font face=\"Courier\">valves.db</font> FROM the last-committed "
+        "<font face=\"Courier\">data/valves.sql</font> - which discards anything you've added "
+        "to your live database since the last time you ran plain "
+        "<font face=\"Courier\">snapshot.py</font>. It's the right tool for a fresh clone that "
+        "has no database yet at all (see the Installation Manual), not for upgrading one you "
+        "already have."))
+
+    s.append(h1("Version-specific notes"))
+    s.append(p(
+        "Nothing beyond the standard procedure above has ever been required. Entries below "
+        "are added only if a future release ever needs something different - if there's "
+        "nothing here for the version you're moving to, the standard procedure is all you "
+        "need."))
+    s.append(h2("v1.3"))
+    s.append(p(
+        "Adds one new table (<font face=\"Courier\">document</font> - extra datasheets, "
+        "links, and the general reference library) and a Docs tab. Purely additive, created "
+        "automatically on first run - no manual steps."))
+    s.append(h2("v1.1 - v1.2"))
+    s.append(p(
+        "v1.1 added an auto-restore prompt for a brand-new database with no "
+        "<font face=\"Courier\">valves.db</font> yet; irrelevant if you're upgrading an "
+        "existing one. No schema changes. (There was no separate v1.2 release.)"))
+
+    return s
+
+
 def main():
-    """Build all three manual PDFs."""
+    """Build all four manual PDFs."""
     build("INSTALLATION_MANUAL.pdf", installation_manual())
     build("USER_MANUAL.pdf", user_manual())
     build("TECHNICAL_MANUAL.pdf", technical_manual())
+    build("UPGRADE_GUIDE.pdf", upgrade_guide())
 
 
 if __name__ == "__main__":

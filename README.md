@@ -69,7 +69,7 @@ collection, I'd like to hear about it.
 | `upload_template.csv` | Column layout for bulk-adding stock — `import-csv` / Tools > Import upload CSV. |
 | `import_researched.py` | Applies a research assistant's reply back into the database — see "Filling in the reference data" below. |
 | `QUICKSTART.md` | Standalone install/use walkthrough, bundled into `Export archive and tools`. |
-| `docs/` | The three PDF manuals (Installation, User, Technical) and `build_manuals.py`, which regenerates them. Also linked from the GUI's Help menu. |
+| `docs/` | The four PDF manuals (Installation, User, Technical, Upgrade) and `build_manuals.py`, which regenerates them. Also linked from the GUI's Help menu. |
 
 Requires Python 3.8+. `openpyxl` is only needed for export; `tkinter` only for the
 GUI — on most systems it ships with Python, but Debian and Ubuntu split it out
@@ -184,8 +184,8 @@ thing to someone else — see `QUICKSTART.md`.
 ### Help menu
 
 A task-by-task **User guide** covering all of the above, plus links to open
-the three PDF manuals in `docs/` (Installation, User, Technical) in whatever
-PDF viewer is installed.
+the four PDF manuals in `docs/` (Installation, User, Technical, Upgrade) in
+whatever PDF viewer is installed.
 
 Merging duplicate types is command-line only, deliberately: it rewrites stock
 rows and is not something to do by mis-click.

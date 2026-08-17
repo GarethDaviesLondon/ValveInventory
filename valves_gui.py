@@ -805,6 +805,8 @@ class App(ttk.Frame):
                       command=lambda: self.do_open_manual("USER_MANUAL.pdf"))
         h.add_command(label="Technical manual (PDF)",
                       command=lambda: self.do_open_manual("TECHNICAL_MANUAL.pdf"))
+        h.add_command(label="Upgrade guide (PDF)",
+                      command=lambda: self.do_open_manual("UPGRADE_GUIDE.pdf"))
         h.add_separator()
         h.add_command(label="About", command=self.do_about)
         m.add_cascade(label="Help", menu=h)

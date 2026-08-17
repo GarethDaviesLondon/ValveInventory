@@ -15,8 +15,76 @@ Source: https://www.radiomuseum.org/tubes/tube_ux210.html"
 Source: https://mullard.org/blogs/news/six-sixty-valves-and-strange-adverts"
 220HPT,220HPT,output pentode,,,,2.0,0.2,150.0,,2.5,,,,economy output pentode for low-current battery-powered portable radios,KT2,2\220HPT.pdf,,confirmed,
 2C34,2C34,double triode power amplifier/oscillator,,Medium Shell 7-Pin,7,6.3,0.8,300.0,5.0,4.2,13.0,16.0,80.0,RF power amplifier or oscillator triode pair for transmitting equipment.,RK34,2\2C34.pdf,,confirmed,
-2P29,2P29,RF/audio pentode,,,,2.2,,,,,,,120.0,"Miniature, low-filament-current RF pentode for oscillator/small RF amplifier duty, likely portable/battery equipment.",,,https://www.radiomuseum.org/tubes/tube_2p29l.html,confirmed,"Web research: two distinct base/lead variants exist (2P29L = Loctal-8, 2P29P = flying leads) with slightly different heater current; could not determine which this inventory item is, so base/pins left blank and only the parameters common to both (heater voltage, frequency) applied.
-Source: https://www.radiomuseum.org/tubes/tube_2p29l.html"
+2P29,2P29,RF/audio pentode,,8 pin,,2.2,,,,,,,120.0,"Miniature, low-filament-current RF pentode for oscillator/small RF amplifier duty, likely portable/battery equipment.",,2\2P29.pdf,https://www.radiomuseum.org/tubes/tube_2p29l.html,confirmed,"Web research: two distinct base/lead variants exist (2P29L = Loctal-8, 2P29P = flying leads) with slightly different heater current; could not determine which this inventory item is, so base/pins left blank and only the parameters common to both (heater voltage, frequency) applied.
+Source: https://www.radiomuseum.org/tubes/tube_2p29l.html
+**2П29Л (2P29L) — Low-Power RF Transmitting Pentode**
+
+**General Specifications & Pinout**
+
+* **Application:** RF power amplification and oscillation up to 120 MHz
+* **Cathode:** Directly heated oxide cathode
+* **Operating Position:** Any
+* **Service Life:** $\ge 1000\text{ hours}$
+* **Base / Construction:** Glass envelope with external shield; special 8-pin keyed base (Loktal-type)
+* **Pinout:**
+* Pins 1, 8: Filament / Cathode
+* Pins 2, 6: Internal Shield
+* Pin 3: Anode (Plate)
+* Pin 4: Grid 3 (Suppressor grid)
+* Pin 5: Grid 2 (Screen grid)
+* Pin 7: Grid 1 (Control grid)
+
+
+
+---
+
+**Inter-electrode Capacitances**
+
+| Parameter | Value | Unit |
+| --- | --- | --- |
+| Input Capacitance ($C_{in}$) | 4.3 | pF |
+| Output Capacitance ($C_{out}$) | 5.5 | pF |
+| Transfer / Grid-to-Plate Capacitance ($C_{ag1}$) | $\le 0.055$ | pF |
+| Anode-to-Cathode Capacitance ($C_{ak}$) | $\le 0.03$ | pF |
+
+---
+
+**Nominal Electrical Operating Conditions**
+
+| Parameter | Value / Tolerance | Unit |
+| --- | --- | --- |
+| Filament Voltage ($V_f$) | 2.2 | V |
+| Anode Voltage ($V_a$) | 160 | V |
+| Screen Grid Voltage ($V_{g2}$) | 120 | V |
+| Suppressor Grid Voltage ($V_{g3}$) | 0 | V |
+| Filament Current ($I_f$) | $122.5 \pm 17.5$ | mA |
+| Anode Cut-off Current (at $V_{g1} = -17.5\text{ V}$) | $\le 1$ | mA |
+| Screen Grid Current ($I_{g2}$) | $\le 2$ | mA |
+| Transconductance / Mutual Conductance ($S$) (at $I_a = 10\text{ mA}$) | $2.15 \pm 0.35$ | mA/V |
+| Control Grid Bias ($V_{g1}$) (at $I_a = 10\text{ mA}$) | $-5.5 \pm 1.7$ | V |
+| Suppressor Grid Bias ($V_{g3}$)* | $-85\text{ }(+15 / -10)$ | V |
+| Output Power ($P_{out}$)** | $\ge 1.2$ | W |
+| Output Power at Reduced Filament Voltage ($V_f = 2.0\text{ V}$) | 1.0 | W |
+| Reverse Control Grid Current ($I_{g1\text{ rev}}$) (at $I_a = 10\text{ mA}$) | $\le 0.6$ | µA |
+| Cathode Emission Current ($I_{k\text{ em}}$) | $\ge 35$ | mA |
+
+**Test condition: $V_{a\text{ load(rms)}} = 5\text{ V}$, $V_{g1\text{(rms)}} = 20\text{ V}$, $R_{g1} = 20\text{ k}\Omega$, $R_{L} = 6\text{ k}\Omega$.*
+
+*Test condition: $V_{g3} = 15\text{ V}$, $V_{g1\text{(rms)}} = 20\text{ V}$, $R_{g1} = 20\text{ k}\Omega$, $R_{L} = 6\text{ k}\Omega$.*
+
+---
+
+**Maximum Ratings (Limiting Values)**
+
+| Parameter | Value | Unit |
+| --- | --- | --- |
+| Maximum Filament Voltage ($V_{f\text{ max}}$) | 2.4 | V |
+| Minimum Filament Voltage ($V_{f\text{ min}}$) | 2.0 | V |
+| Maximum Anode Voltage ($V_{a\text{ max}}$) | 200 | V |
+| Maximum Screen Grid Voltage ($V_{g2\text{ max}}$) | 150 | V |
+| Maximum Anode Dissipation ($P_{a\text{ max}}$) | 2.0 | W |
+| Maximum Screen Grid Dissipation ($P_{g2\text{ max}}$) | 0.7 | W |
+| Maximum Cathode Current ($I_{k\text{ max}}$) | 20 | mA |"
 2XX27N,2XX27N,RF pentode,,,,2.2,,,,,,,,"If you remove the aluminium screening case, you can discover a lovely valve inside.","2J27P, 2Z27,2SH7",,,inferred,"Web research: could NOT confirm a tube with this exact designation. Closest plausible match is Soviet 2Zh27L (2Ж27Л, subminiature HF pentode, heater 2.2V/57mA, Va 120V, Ia 1.9mA, gm 1.25mA/V, ~120MHz, equiv RV2/4P700 - https://www.radiomuseum.org/tubes/tube_2j27l.html), but the designation mismatch (XX vs Zh, N vs L) means this is NOT confirmed - not applied. Please verify the physical marking.
 
 Heater voltage: 2.2V | Heater current: 57mA | Anode voltage: 120V (200V maximum) | Anode current 1.9mA (2.5mA maximum) | Transconductance: 1.9mA/V"
