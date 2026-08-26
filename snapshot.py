@@ -32,6 +32,10 @@ STOCK_COLS = ["id", "type_key", "box", "position", "qty", "manufacturer",
               "date_added", "notes"]
 SOCKET_COLS = ["id", "base", "box", "qty", "condition", "notes"]
 DOCUMENT_COLS = ["id", "type_key", "title", "abstract", "path", "url", "added"]
+VALVE_COLS = ["id", "stock_id", "position", "serial", "manufacturer", "condition",
+              "notes", "added"]
+# Built from valvelib so a test field added there is committed without a second edit.
+TEST_COLS = ["id", "valve_id"] + [c for c, _l, _u, _k in V.TEST_FIELDS]
 
 
 def write_csv(con, path, table, cols, strip=()):
@@ -55,7 +59,8 @@ def write_csv(con, path, table, cols, strip=()):
 def snapshot(args):
     """Export the database at args.db to data/*.csv plus a full data/valves.sql dump.
 
-    Writes one CSV per table (types, stock, sundry, sockets, documents) and a SQL dump
+    Writes one CSV per table (types, stock, sundry, sockets, documents, valves,
+    tests) and a SQL dump
     that `restore()` can replay to recreate the database from scratch. The
     database is migrated to the current schema first (V.init_db), so an older
     one snapshots as its upgraded self rather than failing on a missing column. When
@@ -76,6 +81,8 @@ def snapshot(args):
               ["id", "box", "description", "qty", "notes"])
     write_csv(con, f"{DATA}/sockets.csv", "socket", SOCKET_COLS)
     write_csv(con, f"{DATA}/documents.csv", "document", DOCUMENT_COLS)
+    write_csv(con, f"{DATA}/valves.csv", "valve", VALVE_COLS)
+    write_csv(con, f"{DATA}/tests.csv", "valve_test", TEST_COLS)
 
     # Full SQL dump, so a clone can rebuild the database exactly.
     with open(f"{DATA}/valves.sql", "w", encoding="utf-8") as f:

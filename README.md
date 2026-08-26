@@ -124,13 +124,16 @@ quick lookups and scripting. Five tabs:
   *Edit parameters...* button opens the same field-entry form as the detail
   panel, so a Browse-tab research session never needs to switch tabs to
   record what a datasheet says.
-- **Add stock / Edit lot / Take / Move / Delete lot** act on the selected row.
-  *Add stock* creates the type automatically if it's new, classifying it as it
-  goes. *Edit lot* changes everything recorded against that one physical lot —
-  where it sits, what it's marked as, where it came from, how it tested (see
-  [What a lot records](#what-a-lot-records)). The two editors do different
-  jobs: *Edit lot* is this batch of valves, the panel on the right is the
-  reference record shared by every lot of that type.
+- **Add stock / Edit lot / Individual valves… / Take / Move / Delete lot** act
+  on the selected row. *Add stock* creates the type automatically if it's new,
+  classifying it as it goes. *Edit lot* changes everything recorded against
+  that one physical lot — where it sits, what it's marked as, where it came
+  from (see [What a lot records](#what-a-lot-records)). *Individual valves…*
+  opens the per-valve view: which valve sits where, what each is marked with,
+  and what each one measured (see
+  [Individual valves and testing](#individual-valves-and-testing)). The two
+  editors do different jobs: *Edit lot* is this batch of valves, the panel on
+  the right is the reference record shared by every lot of that type.
 
 ### Bases / Sockets
 
@@ -207,6 +210,9 @@ Two tables, as discussed:
   power out, frequency, equivalents, and the path to its datasheet in the local archive.
 - **`stock`** — one row per lot. Type, box, position, quantity, manufacturer,
   condition, Type 1 / Type 2, origin, test values, other, notes.
+- **`valve`** — one row per individually-tracked physical valve, belonging to a
+  lot. Its own position, serial/date code, maker, condition.
+- **`valve_test`** — one row per test of one valve, or of one section of it.
 
 Plus `sundry` for the sockets, screening cans and crystals, and `box` for
 per-box location notes.
@@ -238,13 +244,82 @@ Upgrading an existing database needs no migration step of your own: opening
 it with this version adds the columns in place, leaving every value already
 there untouched. See `docs/UPGRADE_GUIDE.pdf`.
 
+### Individual valves and testing
+
+A lot is a quantity — "6 x KT66 in box 8" — and for most of a collection
+that's all it ever needs to be. Where it isn't, **expand** the lot: that
+creates one row per valve held, in the `valve` table, and from then on each
+valve is a thing in its own right with its own position on the shelf, its own
+serial or date code, its own maker and condition (for a mixed lot), and its
+own test history.
+
+```bash
+python3 valves.py expand 417            # 6 x KT66 becomes 6 valve rows
+python3 valves.py lot 417               # which valve is where, and what it measured
+python3 valves.py valve 22 --position B-01 --serial 'AJ3 K7'
+```
+
+Expanding is opt-in per lot, and safe to re-run — it only ever tops a lot up.
+`valves.py add` expands a new lot straight away (pass `--no-individual` to
+skip); `import-csv` doesn't unless you pass `--individual`, since a bulk
+import is exactly where a few hundred rows become a few thousand. In the GUI
+it's *Individual valves…* → *Track individually*, and the **Ind** column on
+the results table shows how many of each lot are tracked.
+
+#### What a test records
+
+Each test is a row in `valve_test`, and **testing is never destructive** — a
+retest years later adds to the history rather than replacing it. Every reading
+is optional, because no single tester produces all of them: an emission tester
+gives one figure, an AVO VCM163 reads anode current and mutual conductance on
+two meters at once plus separate gas and insulation tests, a curve tracer
+gives everything.
+
+| | Field | Units |
+|---|---|---|
+| **Conditions** | `tested_on`, `tester` | |
+| | `va`, `vg` | V — a gm figure means nothing without them |
+| | `bias_mode` | fixed / auto — the same valve reads differently under each |
+| **Readings** | `ia` anode (plate) current | mA |
+| | `ig2` screen current | mA |
+| | `gm` mutual conductance | **mA/V** (× 1000 for the µmhos a US tester shows) |
+| | `gm_pct` | % of nominal — how valves are actually graded |
+| | `emission_pct` | % |
+| **Fault tests** | `gas_ua` gas / grid current | µA |
+| | `insulation_mohm` | MΩ |
+| | `heater_cathode` | MΩ or pass/fail |
+| | `shorts`, `verdict` | pass/fail, good/weak/short/failed |
+
+```bash
+python3 valves.py test 22 --gm 6.2 --ia 36 --tester 'AVO VCM163' \
+                          --va 250 --vg -14 --gas-ua 2 --verdict good
+python3 valves.py tests 22               # every test of that valve, newest first
+```
+
+**A double triode is recorded a section at a time** — run `test` twice, once
+with `--section a` and once with `--section b`. That's how the readings come
+off the meter, and comparing the two is the whole point of testing one for
+phase-inverter duty. Listings show the most recent test of either section;
+the history shows both.
+
+#### Quantity and individuals stay in step
+
+`stock.qty` remains the authoritative count. `take` removes that many
+individual rows too — **least documented first**, untested before tested,
+unmarked before serial-numbered — so using valves up never quietly discards
+test history you took the trouble to record. Deleting a lot removes its
+valves and their tests with it. `valves.py check` (Tools > Check individual
+valve counts) reports any lot where the two have drifted apart; it reports
+rather than corrects, because which side is right depends on what's actually
+in the box.
+
 ## Version control
 
 The database is binary, so `valves.db` is gitignored and a text snapshot is
 committed instead. Refresh it before you commit:
 
 ```bash
-python3 snapshot.py          # writes data/types.csv, stock.csv, sundry.csv, valves.sql
+python3 snapshot.py          # writes data/*.csv (types, stock, valves, tests, ...) + valves.sql
 git add -A && git commit -m "restocked box 12"
 ```
 
@@ -284,7 +359,7 @@ boxes and quantities:
 python3 -c "
 import valvelib as V
 con = V.init_db()
-for t in ('stock', 'socket', 'sundry', 'box'):
+for t in ('valve_test', 'valve', 'stock', 'socket', 'sundry', 'box'):
     con.execute(f'DELETE FROM {t}')
 con.commit()
 n = con.execute('SELECT COUNT(*) FROM valve_type').fetchone()[0]
@@ -304,6 +379,8 @@ python3 valves.py show ECC83              # full reference record
 python3 valves.py stats                   # collection summary
 python3 valves.py docs --type EL34        # a type's datasheet + extra links
 python3 valves.py docs                    # the general reference library
+python3 valves.py lot 417                 # a lot's individual valves and their tests
+python3 valves.py tests 22                # one valve's test history
 
 # parametric search - this is the part the spreadsheet couldn't do
 python3 valves.py search --function "output pentode" --heater 6.3

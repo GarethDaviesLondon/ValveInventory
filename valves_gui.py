@@ -53,7 +53,7 @@ PAD = 8
 STOCK_COLS = [
     ("box", "Box", 50), ("position", "Pos", 52),
     ("type", "Type", 100), ("type1", "Type 1", 70), ("type2", "Type 2", 70),
-    ("match", "Match", 90), ("qty", "Qty", 42),
+    ("match", "Match", 90), ("qty", "Qty", 42), ("individuals", "Ind", 40),
     ("manufacturer", "Maker", 88), ("condition", "Condition", 92),
     ("origin", "Origin", 120),
     ("base", "Base", 64), ("function", "Function", 190), ("heater_v", "Htr V", 48),
@@ -99,7 +99,9 @@ ADV_FIELDS = [
 # populate() to render against STOCK_COLS.
 STOCK_SELECT = """s.id, s.box, s.position, COALESCE(t.name, s.type_key) AS type,
                   s.type_key, s.type1, s.type2, s.qty, s.manufacturer, s.condition,
-                  s.origin, s.test_values, s.other, s.notes, t.base,
+                  s.origin, s.test_values, s.other, s.notes,
+                  (SELECT COUNT(*) FROM valve v WHERE v.stock_id = s.id) AS individuals,
+                  t.base,
                   t.function, t.heater_v, t.heater_a, t.pa_max,
                   t.datasheet_path, t.confidence"""
 
@@ -267,12 +269,17 @@ def parse_cmp(expr):
 class FormDialog(tk.Toplevel):
     """Small modal form. fields = [(key, label, default, kind)]"""
 
-    def __init__(self, parent, title, fields, ok_label="OK"):
+    def __init__(self, parent, title, fields, ok_label="OK", columns=1):
         """Build the form (one Entry or Combobox per field), center it under
         parent, then block via wait_window until OK or Cancel is chosen.
         fields is [(key, label, default, kind)] where kind is int/float/str
         for a plain Entry or a list of choices for a Combobox. Result is
-        left in self.result (a dict) on OK, or None if cancelled."""
+        left in self.result (a dict) on OK, or None if cancelled.
+
+        columns lays the fields out in that many label+field pairs per row,
+        filling left to right. It exists for the test-entry form, which has
+        seventeen fields and would otherwise be taller than a laptop screen;
+        everything else leaves it at 1 and is unaffected."""
         super().__init__(parent)
         self.title(title)
         self.resizable(False, False)
@@ -283,19 +290,22 @@ class FormDialog(tk.Toplevel):
         frm = ttk.Frame(self, padding=PAD * 2)
         frm.grid(sticky="nsew")
         for i, (key, label, default, kind) in enumerate(fields):
-            ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=3, padx=(0, PAD))
+            row, pair = divmod(i, columns)
+            ttk.Label(frm, text=label).grid(row=row, column=pair * 2, sticky="w", pady=3,
+                                            padx=(0 if pair == 0 else PAD * 2, PAD))
             var = tk.StringVar(value="" if default is None else str(default))
             self._vars[key] = (var, kind)
             if isinstance(kind, list):
                 w = ttk.Combobox(frm, textvariable=var, values=kind, width=28)
             else:
                 w = ttk.Entry(frm, textvariable=var, width=30)
-            w.grid(row=i, column=1, sticky="ew", pady=3)
+            w.grid(row=row, column=pair * 2 + 1, sticky="ew", pady=3)
             if i == 0:
                 w.focus_set()
 
         btns = ttk.Frame(frm)
-        btns.grid(row=len(fields), column=0, columnspan=2, sticky="e", pady=(PAD * 2, 0))
+        btns.grid(row=(len(fields) + columns - 1) // columns, column=0,
+                  columnspan=columns * 2, sticky="e", pady=(PAD * 2, 0))
         ttk.Button(btns, text="Cancel", command=self.destroy).pack(side="right", padx=(PAD, 0))
         ttk.Button(btns, text=ok_label, command=self._ok).pack(side="right")
         self.bind("<Return>", lambda e: self._ok())
@@ -475,6 +485,258 @@ class TypeDetailWindow(tk.Toplevel):
     def _lookup(self, site=None):
         """Delegate to the App's web-lookup action for this popup's type."""
         self.app.do_lookup(site, self.row)
+
+
+# Columns of the individual-valves list inside LotValvesDialog.
+VALVE_COLS = [
+    ("id", "Valve", 50), ("position", "Pos", 55), ("serial", "Serial", 90),
+    ("manufacturer", "Maker", 90), ("condition", "Condition", 90),
+    ("tests", "Tests", 44), ("last_tested", "Last test", 84),
+    ("last_gm", "gm mA/V", 62), ("last_gm_pct", "% nom", 50),
+    ("last_ia", "Ia mA", 55), ("last_verdict", "Verdict", 70),
+]
+
+
+class LotValvesDialog(tk.Toplevel):
+    """The individual valves in one stock lot, and what each of them measured.
+
+    A lot on its own is a quantity: "6 x KT66 in box 8". That is all most of
+    a collection ever needs to be. This is the view for the lots where it
+    isn't - where each valve sits in its own place on the shelf, is marked
+    with its own date code, and has its own test history that matters when
+    you go looking for a matched pair.
+
+    Expanding a lot is the opt-in: it creates one row per valve held, after
+    which each can be placed, labelled and tested independently. Everything
+    here works through the valvelib helpers, so the desktop app and the CLI
+    treat a lot identically.
+    """
+
+    def __init__(self, app, lot_id, on_change=None):
+        """Build the popup for stock lot `lot_id`; on_change is called after
+        any edit that alters the lot itself (expanding it, deleting a valve),
+        so the window behind can refresh its own counts."""
+        super().__init__(app.master)
+        self.app = app
+        self.lot_id = lot_id
+        self.on_change = on_change
+        self.geometry("880x520")
+        self.transient(app.master)
+
+        top = ttk.Frame(self, padding=(PAD, PAD, PAD, 0))
+        top.pack(fill="x")
+        self.heading = ttk.Label(top, text="", font=("TkDefaultFont", 13, "bold"))
+        self.heading.pack(side="left")
+        self.count_label = ttk.Label(top, text="", foreground="#666")
+        self.count_label.pack(side="left", padx=(PAD, 0))
+
+        bar = ttk.Frame(self, padding=(PAD, PAD, PAD, 0))
+        bar.pack(fill="x")
+        self.expand_btn = ttk.Button(bar, text="Track individually", command=self._expand)
+        self.expand_btn.pack(side="left")
+        ttk.Button(bar, text="Edit valve...", command=self._edit).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Record test...", command=self._record_test).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Test history...", command=self._history).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Remove valve", command=self._remove).pack(side="left", padx=(6, 0))
+
+        mid = ttk.Frame(self, padding=PAD)
+        mid.pack(fill="both", expand=True)
+        self.tree = ttk.Treeview(mid, columns=[c[0] for c in VALVE_COLS],
+                                 show="headings", selectmode="browse", height=14)
+        for key, label, width in VALVE_COLS:
+            self.tree.heading(key, text=label)
+            self.tree.column(key, width=width, minwidth=40, stretch=(key == "serial"),
+                             anchor="e" if key in ("tests", "last_gm", "last_gm_pct",
+                                                   "last_ia") else "w")
+        vs = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vs.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="left", fill="y")
+        self.tree.bind("<Double-1>", lambda e: self._history())
+        self.tree.tag_configure("untested", foreground="#8a6d00")
+        self.tree.tag_configure("weak", foreground="#a03000")
+
+        self.status = ttk.Label(self, text="", anchor="w", foreground="#444",
+                                padding=(PAD, 0, PAD, PAD))
+        self.status.pack(fill="x")
+
+        self.refresh()
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.update_idletasks()
+        self.geometry(f"+{app.master.winfo_rootx() + 60}+{app.master.winfo_rooty() + 60}")
+
+    # ---- data ----
+
+    def refresh(self):
+        """Re-read the lot and its valves and redraw everything."""
+        self.lot = self.app.con.execute("SELECT * FROM v_stock WHERE id=?",
+                                        (self.lot_id,)).fetchone()
+        if not self.lot:
+            self.destroy()
+            return
+        self.title(f"Individual valves - {self.lot['type']} in box {self.lot['box']}")
+        self.heading.config(text=f"{self.lot['qty']} x {self.lot['type']}, box {self.lot['box']}"
+                                 + (f", position {self.lot['position']}"
+                                    if self.lot["position"] else ""))
+        self.valves = V.lot_valves(self.app.con, self.lot_id)
+        self.tree.delete(*self.tree.get_children())
+        for v in self.valves:
+            vals = []
+            for key, _l, _w in VALVE_COLS:
+                x = v.get(key)
+                vals.append("" if x is None else x)
+            tags = []
+            if not v["tests"]:
+                tags.append("untested")
+            elif (v["last_verdict"] or "").lower() in ("weak", "short", "failed", "fail"):
+                tags.append("weak")
+            self.tree.insert("", "end", iid=str(v["id"]), values=vals, tags=tuple(tags))
+        n = len(self.valves)
+        self.count_label.config(
+            text=f"{n} tracked individually" if n else "not tracked individually")
+        short = self.lot["qty"] - n
+        self.expand_btn.config(text=f"Track individually (+{short})" if short > 0
+                               else "Track individually",
+                               state="normal" if short > 0 else "disabled")
+        if not n:
+            self.status.config(text="This lot is held as a quantity. \"Track individually\" "
+                                    f"creates {self.lot['qty']} rows, one per valve, each with "
+                                    "its own position and test history.")
+        else:
+            tested = sum(1 for v in self.valves if v["tests"])
+            note = "   -   amber = never tested" if tested < n else ""
+            if short:
+                note += f"   -   {short} of the {self.lot['qty']} held not tracked yet"
+            self.status.config(text=f"{tested} of {n} tested{note}")
+        kids = self.tree.get_children()
+        if kids:
+            self.tree.selection_set(kids[0])
+
+    def selected(self):
+        """The selected valve's dict from self.valves, or None."""
+        sel = self.tree.selection()
+        if not sel:
+            self.status.config(text="select a valve first")
+            return None
+        return next((v for v in self.valves if str(v["id"]) == sel[0]), None)
+
+    # ---- actions ----
+
+    def _expand(self):
+        """Create the missing individual rows, one per valve the lot holds."""
+        made = V.expand_lot(self.app.con, self.lot_id)
+        self.refresh()
+        self.status.config(text=f"now tracking {made} more valve(s) individually"
+                                if made else "already tracking all of them")
+        if made and self.on_change:
+            self.on_change()
+
+    def _edit(self):
+        """Edit one valve's own fields - where it sits, how it's marked, and
+        (for a mixed lot) its own maker and condition."""
+        v = self.selected()
+        if not v:
+            return
+        fields = [(col, label, v.get(col) or "",
+                   ["NOS", "used", "untested", "matched pair", "matched quad"]
+                   if col == "condition" else str)
+                  for col, label in V.VALVE_FIELDS]
+        d = FormDialog(self, f"Valve {v['id']} - {self.lot['type']}", fields, ok_label="Save")
+        if not d.result:
+            return
+        cols = [col for col, _l in V.VALVE_FIELDS]
+        self.app.con.execute(f"UPDATE valve SET {','.join(c + '=?' for c in cols)} WHERE id=?",
+                             [d.result[c] for c in cols] + [v["id"]])
+        self.app.con.commit()
+        self.refresh()
+        self.status.config(text=f"updated valve {v['id']}")
+
+    def _record_test(self):
+        """Record one test of the selected valve.
+
+        Every reading is optional - no tester produces all of them - so a row
+        holding a gm figure and a date is a perfectly good record. A double
+        triode is recorded a section at a time: run this twice, once with
+        Section a and once with b, which is how the readings come off the
+        meter and how they have to be compared for matching."""
+        v = self.selected()
+        if not v:
+            return
+        defaults = {"tested_on": datetime.date.today().isoformat()}
+        last = self.app.con.execute(
+            "SELECT * FROM valve_test WHERE valve_id=? ORDER BY tested_on DESC, id DESC LIMIT 1",
+            (v["id"],)).fetchone()
+        if last:
+            # carry the rig forward: the tester and the conditions are almost
+            # always the same across a session, the readings never are
+            for col in ("tester", "va", "vg", "bias_mode"):
+                if last[col] is not None:
+                    defaults[col] = last[col]
+        fields = [(col, label + (f" ({unit})" if unit else ""), defaults.get(col, ""),
+                   ["fixed", "auto"] if col == "bias_mode" else
+                   ["pass", "fail"] if col == "shorts" else
+                   ["good", "weak", "short", "failed"] if col == "verdict" else
+                   ["", "a", "b"] if col == "section" else kind)
+                  for col, label, unit, kind in V.TEST_FIELDS]
+        d = FormDialog(self, f"Record test - valve {v['id']}, {self.lot['type']}",
+                       fields, ok_label="Record", columns=2)
+        if not d.result:
+            return
+        if not any(d.result[c] is not None for c, _l, _u, _k in V.TEST_FIELDS
+                   if c != "tested_on"):
+            self.status.config(text="nothing recorded - a test needs at least one reading")
+            return
+        V.record_test(self.app.con, v["id"], d.result)
+        self.refresh()
+        self.tree.selection_set(str(v["id"]))
+        self.status.config(text=f"recorded a test of valve {v['id']}")
+
+    def _history(self):
+        """Show every test of the selected valve, newest first."""
+        v = self.selected()
+        if not v:
+            return
+        rows = self.app.con.execute(
+            "SELECT * FROM valve_test WHERE valve_id=? ORDER BY tested_on DESC, id DESC",
+            (v["id"],)).fetchall()
+        if not rows:
+            self.status.config(text=f"valve {v['id']} has never been tested")
+            return
+        lines = [f"{self.lot['type']} - valve {v['id']}"
+                 + (f", position {v['position']}" if v["position"] else "")
+                 + (f", serial {v['serial']}" if v["serial"] else ""), ""]
+        for r in rows:
+            lines.append(f"{r['tested_on'] or 'undated'}"
+                         + (f"   {r['tester']}" if r["tester"] else "")
+                         + (f"   section {r['section']}" if r["section"] else ""))
+            for col, label, unit, _kind in V.TEST_FIELDS:
+                if col in ("tested_on", "tester", "section") or r[col] is None:
+                    continue
+                lines.append(f"    {label:<36} {r[col]}" + (f" {unit}" if unit else ""))
+            lines.append("")
+        TextWindow(self, f"Test history - valve {v['id']}", "\n".join(lines))
+
+    def _remove(self):
+        """Delete one individual valve, and with it its test history.
+
+        This is for correcting the record - a row that shouldn't be there.
+        Using a valve up is Take on the Valves tab, which reduces the lot's
+        quantity as well and picks the least documented valves to remove."""
+        v = self.selected()
+        if not v:
+            return
+        extra = (f" and its {v['tests']} test record(s)") if v["tests"] else ""
+        if not messagebox.askyesno(
+                "Remove valve",
+                f"Remove valve {v['id']} from this lot{extra}?\n\n"
+                f"The lot's quantity stays at {self.lot['qty']} - use Take on the Valves "
+                "tab if you have actually used the valve.", parent=self):
+            return
+        self.app.con.execute("DELETE FROM valve WHERE id=?", (v["id"],))
+        self.app.con.commit()
+        self.refresh()
+        if self.on_change:
+            self.on_change()
 
 
 class DatasheetManagerDialog(tk.Toplevel):
@@ -813,6 +1075,7 @@ class App(ttk.Frame):
         t.add_command(label="Collection summary", command=self.do_stats)
         t.add_command(label="What needs data", command=self.do_gaps)
         t.add_command(label="Possible duplicate types", command=self.do_dupes)
+        t.add_command(label="Check individual valve counts", command=self.do_check_lots)
         t.add_separator()
         t.add_command(label="Scan datasheet archive", command=self.do_scan)
         t.add_command(label="Set archive folder...", command=self.do_set_archive)
@@ -857,6 +1120,8 @@ class App(ttk.Frame):
         bar.pack(fill="x", pady=(0, PAD))
         ttk.Button(bar, text="Add stock", command=self.do_add).pack(side="left")
         ttk.Button(bar, text="Edit lot", command=self.do_edit_lot).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Individual valves...",
+                   command=self.do_lot_valves).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Take", command=self.do_take).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Move", command=self.do_move).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Delete lot", command=self.do_delete).pack(side="left", padx=(6, 0))
@@ -1480,6 +1745,10 @@ class App(ttk.Frame):
             for key, _l, _w in STOCK_COLS:
                 if key == "sheet":
                     vals.append("yes" if r["datasheet_path"] else "")
+                elif key == "individuals":
+                    # blank, not 0: a lot held as a plain quantity has nothing
+                    # to say here, and a column of zeroes reads as a problem
+                    vals.append(r.get("individuals") or "")
                 else:
                     v = r.get(key)
                     vals.append("" if v is None else v)
@@ -1757,6 +2026,7 @@ class App(ttk.Frame):
             ("test_values", "Test values", "", str),
             ("other", "Other", "", str),
             ("notes", "Notes", "", str),
+            ("individual", "Track valves individually", "yes", ["yes", "no"]),
         ], ok_label="Add")
         if not d.result or not d.result["type"] or not d.result["box"]:
             return
@@ -1771,20 +2041,24 @@ class App(ttk.Frame):
                 (key, r["type"].strip().upper(), inf.get("function"), inf.get("family"),
                  inf.get("heater_v"), inf.get("heater_a")))
             created = True
-        self.con.execute(
+        cur = self.con.execute(
             """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes,
                                   position,type1,type2,origin,test_values,other)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [key, r["box"], r["qty"] or 1, r["maker"], r["condition"],
              datetime.date.today().isoformat(), r["notes"]]
             + [r[col] for col, _label, _hint in LOT_FIELDS])
+        lot_id = cur.lastrowid      # read before the box upsert moves it
         self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
                          (r["box"], "attic"))
         self.con.commit()
+        made = V.expand_lot(self.con, lot_id) if r["individual"] != "no" else 0
         self.refresh_boxes()
         self.run_search()
         self.set_status(f"added {r['qty']} x {r['type']} to box {r['box']}"
-                        + ("  (new type created)" if created else ""))
+                        + ("  (new type created)" if created else "")
+                        + (f"  -  tracking {made} valve(s) individually; "
+                           "\"Individual valves...\" to place and test them" if made else ""))
 
     def do_edit_lot(self):
         """Edit everything recorded against the selected lot - where it is,
@@ -1832,9 +2106,25 @@ class App(ttk.Frame):
         self.set_status(f"updated lot {r['id']} - {r['type']} in box {d.result['box']}"
                         + (f", position {d.result['position']}" if d.result["position"] else ""))
 
+    def do_lot_valves(self):
+        """Open the individual-valves view for the selected lot.
+
+        That is where a lot stops being a quantity and becomes a list of
+        actual valves, each with its own shelf position, markings and test
+        history - see LotValvesDialog."""
+        r = self.selected_row()
+        if not r:
+            self.set_status("select a lot first")
+            return
+        LotValvesDialog(self, r["id"], on_change=self.run_search)
+
     def do_take(self):
         """Prompt for a quantity to remove from the selected lot; deletes
-        the lot outright if the amount taken meets or exceeds what's held."""
+        the lot outright if the amount taken meets or exceeds what's held.
+
+        Where the lot tracks its valves individually, the same number of
+        those records go too - the least documented first, so using valves
+        up never quietly discards test history (see V.take_from_lot)."""
         r = self.selected_row()
         if not r:
             self.set_status("select a lot first")
@@ -1846,14 +2136,11 @@ class App(ttk.Frame):
         n = d.result["qty"] or 0
         if n <= 0:
             return
-        if n >= r["qty"]:
-            self.con.execute("DELETE FROM stock WHERE id=?", (r["id"],))
-        else:
-            self.con.execute("UPDATE stock SET qty=qty-? WHERE id=?", (n, r["id"]))
-        self.con.commit()
+        took = V.take_from_lot(self.con, r["id"], n)
         self.refresh_boxes()
         self.run_search()
-        self.set_status(f"took {min(n, r['qty'])} x {r['type']} from box {r['box']}")
+        self.set_status(f"took {took} x {r['type']} from box {r['box']}"
+                        + (f" (and {took} individual record(s))" if r.get("individuals") else ""))
 
     def do_move(self):
         """Prompt for a destination box (and optionally a position in it) and
@@ -1872,9 +2159,11 @@ class App(ttk.Frame):
         if not d.result or not d.result["to"]:
             return
         # a position only means anything within its own box, so the old one is
-        # replaced or cleared rather than carried across to the new box
+        # replaced or cleared rather than carried across to the new box - and
+        # that goes for the individual valves' positions as well
         self.con.execute("UPDATE stock SET box=?, position=? WHERE id=?",
                          (d.result["to"], d.result["position"], r["id"]))
+        self.con.execute("UPDATE valve SET position=NULL WHERE stock_id=?", (r["id"],))
         self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
                          (d.result["to"], "attic"))
         self.con.commit()
@@ -2583,6 +2872,46 @@ class App(ttk.Frame):
             "type. From the command line: valves.py edit <lot id> --position B-12 ... (lot "
             "ids are the ID column of valves.py box / find / show).",
             "",
+            "INDIVIDUAL VALVES AND TESTING", "",
+            "  A lot is a quantity - \"6 x KT66 in box 8\" - and for most of a collection "
+            "that is all it ever needs to be. Where it isn't, select the lot and click "
+            "\"Individual valves...\", then \"Track individually\": that creates one row per "
+            "valve held, and from then on each valve has its own position on the shelf, its "
+            "own serial or date code, its own maker and condition (for a mixed lot), and its "
+            "own test history. The Ind column on the results table shows how many of a lot "
+            "are tracked this way; blank means the lot is still just a quantity. New lots "
+            "added with \"Add stock\" are tracked individually from the start unless you say "
+            "otherwise on the form.",
+            "  \"Record test...\" logs one test of the selected valve. Every reading is "
+            "optional - no tester produces all of them - so a row holding a gm figure and a "
+            "date is a perfectly good record. What it can hold:",
+            "    Conditions     which tester, Va and Vg at test, fixed or auto bias. A gm "
+            "figure means nothing without them, and the same valve reads differently under "
+            "fixed and auto bias, so the tester and conditions are carried forward from the "
+            "valve's last test.",
+            "    Readings       anode current Ia (mA), screen current Ig2 (mA), mutual "
+            "conductance gm (mA/V - multiply by 1000 for the micromhos an American tester "
+            "shows), gm as a percentage of nominal, emission %.",
+            "    Fault tests    gas / grid current (uA), insulation (Mohm), heater-cathode "
+            "leakage, shorts, and an overall verdict.",
+            "  Testing is never destructive: each test is a new row, so retesting a valve "
+            "years later builds its history rather than replacing it. \"Test history...\" (or "
+            "double-clicking a valve) shows every test of it, newest first. A double triode "
+            "is recorded a section at a time - run Record test twice, once with Section a and "
+            "once with b, which is how the readings come off the meter and how they have to "
+            "be compared for matching. The list shows the most recent test of either section; "
+            "the history shows both.",
+            "  Amber rows in that list are valves never tested; red-brown are ones whose last "
+            "verdict was weak, short or failed.",
+            "  Take (on the Valves tab) removes individual rows along with the quantity, "
+            "least documented first - untested before tested, unmarked before serial-numbered "
+            "- so using valves up never quietly discards test history. \"Remove valve\" in the "
+            "dialog is the other thing: it corrects the record without touching the quantity. "
+            "Tools > Check individual valve counts reports any lot where the two have drifted "
+            "apart.",
+            "  From the command line: valves.py expand <lot id>, then lot / valve / test / "
+            "tests / check.",
+            "",
             "REMOVING / MOVING STOCK", "",
             "  Select a row, then Take (use up some of a lot), Move (to another box, "
             "optionally giving its position there), or Delete lot (removes it - asks first). "
@@ -3075,6 +3404,35 @@ class App(ttk.Frame):
             msg += f"\nNot in database: {', '.join(missing)}"
         self.set_status(f"applied research data from {path}: {len(applied)} types")
         messagebox.showinfo("Applied", msg)
+
+    def do_check_lots(self):
+        """Tools > Check individual valve counts. Report lots whose individual
+        valve rows disagree with their quantity.
+
+        A lot is consistent when it has either no individual rows (held as a
+        plain quantity) or exactly qty of them. Anything else is reported
+        rather than corrected: whether the count or the quantity is right
+        depends on what's actually in the box."""
+        bad = V.check_lots(self.con)
+        n = self.con.execute("SELECT COUNT(*) c FROM valve").fetchone()["c"]
+        lots = self.con.execute("SELECT COUNT(DISTINCT stock_id) c FROM valve").fetchone()["c"]
+        tests = self.con.execute("SELECT COUNT(*) c FROM valve_test").fetchone()["c"]
+        head = [f"{n} valve(s) tracked individually across {lots} lot(s)",
+                f"{tests} test(s) recorded", ""]
+        if not bad:
+            body = head + ["Every lot is consistent: each one either holds a plain quantity",
+                           "or has exactly one individual row per valve held."]
+        else:
+            body = head + [f"{len(bad)} lot(s) where the two disagree:", "",
+                           f"  {'LOT':<6}{'BOX':<7}{'TYPE':<14}{'QTY':>5}{'TRACKED':>9}",
+                           "  " + "-" * 41]
+            for r in bad:
+                body.append(f"  {r['id']:<6}{str(r['box']):<7}{r['type'][:13]:<14}"
+                            f"{r['qty']:>5}{r['individuals']:>9}")
+            body += ["", "Select the lot on the Valves tab, then \"Individual valves...\":",
+                     "  \"Track individually\" tops it up to the quantity, or",
+                     "  \"Edit lot\" sets the quantity to match what's tracked."]
+        TextWindow(self.master, "Individual valve counts", "\n".join(body))
 
     def clear_filters(self):
         """Resets every Valves-tab search field (text, function, base,

@@ -438,8 +438,8 @@ def user_manual():
     s.append(h2("Toolbar"))
     s.append(p(
         "<b>Add stock</b> creates the type automatically if it's new, classifying it from "
-        "its designation. <b>Edit lot</b>, <b>Take</b>, <b>Move</b>, and <b>Delete lot</b> "
-        "act on the selected row. <b>Move</b> also offers a position in the destination box; "
+        "its designation. <b>Edit lot</b>, <b>Individual valves...</b>, <b>Take</b>, "
+        "<b>Move</b>, and <b>Delete lot</b> act on the selected row. <b>Move</b> also offers a position in the destination box; "
         "leaving it blank clears the old one, which belonged to the box the lot has just "
         "left."))
     s.append(note(
@@ -487,6 +487,88 @@ def user_manual():
         "exactly as it always did until there's something in there to show. In the window "
         "they're always-present columns on the results table, since the table scrolls "
         "sideways and a stable column layout is easier to work against."))
+
+    s.append(h1("Individual valves and testing"))
+    s.append(p(
+        "A lot is a quantity - \u201c6 x KT66 in box 8\u201d - and for most of a collection "
+        "that is all it ever needs to be. Where it isn't, select the lot and click "
+        "<b>Individual valves...</b>, then <b>Track individually</b>. That creates one row "
+        "per valve held, and from then on each valve is a thing in its own right: its own "
+        "position on the shelf, its own serial or date code, its own maker and condition "
+        "where a lot is mixed, and its own test history."))
+    s.append(p(
+        "Expanding a lot is opt-in and per lot, so a box of a hundred identical indicators "
+        "stays one line until you decide otherwise. It is also safe to repeat - it only ever "
+        "tops a lot up to the quantity it holds, never duplicates or resets what is already "
+        "there. The <b>Ind</b> column on the results table shows how many of each lot are "
+        "tracked this way; blank means the lot is still just a quantity. New lots added with "
+        "<b>Add stock</b> are tracked individually from the start unless the form says "
+        "otherwise."))
+
+    s.append(h2("Recording a test"))
+    s.append(p(
+        "<b>Record test...</b> logs one test of the selected valve. Every reading is "
+        "optional, because no single tester produces all of them: an emission tester gives "
+        "one figure, an AVO VCM163 reads anode current and mutual conductance on two meters "
+        "at once plus separate gas and insulation tests, a curve tracer gives everything. A "
+        "record holding nothing but a gm figure and a date is a perfectly good record."))
+    s.append(table([
+        ["Field", "Units", "What it is"],
+        ["Tested on, Tester", "", "When, and on what."],
+        ["Va, Vg at test", "V", "The conditions the readings were taken under. A gm figure "
+                                "means nothing without them."],
+        ["Bias mode", "", "Fixed or auto. The same valve reads differently under each."],
+        ["Ia", "mA", "Anode (plate) current - the headline figure on most testers, and what "
+                     "power valves are matched on."],
+        ["Ig2", "mA", "Screen current, for tetrodes and pentodes."],
+        ["gm", "mA/V", "Mutual conductance. British practice throughout; multiply by 1000 "
+                       "for the micromhos an American tester shows."],
+        ["gm as % of nominal", "%", "How valves are actually graded and sold."],
+        ["Emission", "%", "The single reading a cheap emission tester gives."],
+        ["Gas / grid current", "uA", "The gas test - an AVO reads to 100 uA full scale."],
+        ["Insulation", "Mohm", "Interelectrode leakage."],
+        ["Heater-cathode", "", "The separate cathode/heater test: a figure, or pass/fail."],
+        ["Shorts, Verdict", "", "Pass/fail, and your overall call on the valve."],
+    ], [96, 44, 300]))
+    s.append(note(
+        "Testing is never destructive. Each test is a new row, so retesting a valve years "
+        "later builds its history rather than replacing it - and the trend between two "
+        "readings is usually the interesting part. <b>Test history...</b>, or a double-click "
+        "on the valve, shows every test of it, newest first."))
+    s.append(p(
+        "The tester and the test conditions are carried forward from that valve's last test, "
+        "since they rarely change across a session and the readings always do."))
+    s.append(h3("Double triodes"))
+    s.append(p(
+        "A double triode is recorded a section at a time: run <b>Record test</b> twice, once "
+        "with Section <i>a</i> and once with <i>b</i>. That is how the readings come off the "
+        "meter, and comparing the two sections is the whole point of testing an ECC83 for "
+        "phase-inverter duty. The valve list shows the most recent test of either section; "
+        "the history shows both."))
+
+    s.append(h2("Colours in the valve list"))
+    s.append(p(
+        "<b>Amber</b> rows are valves that have never been tested. <b>Red-brown</b> rows are "
+        "ones whose last verdict was weak, short or failed."))
+
+    s.append(h2("Using valves up, and correcting the record"))
+    s.append(p(
+        "These are two different things and they behave differently. <b>Take</b>, on the "
+        "Valves tab, is for a valve you have actually used: it reduces the lot's quantity "
+        "and removes that many individual rows as well, choosing the <i>least documented</i> "
+        "first - untested before tested, unmarked before serial-numbered - so using valves up "
+        "never quietly discards test history you took the trouble to record. <b>Remove "
+        "valve</b>, in the dialog, is for a row that should not have been there: it deletes "
+        "the record and leaves the quantity alone."))
+    s.append(note(
+        "Deleting a valve takes its test history with it, and deleting a lot takes its "
+        "valves and their tests. That is deliberate - a test belongs to a particular piece "
+        "of glass and means nothing without it - but it is the one irreversible action here, "
+        "so the dialog says what will go before it goes."))
+    s.append(p(
+        "<b>Tools &gt; Check individual valve counts</b> reports any lot where the quantity "
+        "and the number of individual rows have drifted apart. It reports rather than "
+        "corrects: which of the two is right depends on what is actually in the box."))
 
     s.append(h1("The Bases / Sockets tab"))
     s.append(p(
@@ -654,7 +736,7 @@ def technical_manual():
 
     s.append(h1("2. Database schema"))
     s.append(p(
-        "Six tables plus one convenience view. The tables are declared in "
+        "Eight tables plus one convenience view. The tables are declared in "
         "<font face=\"Courier\">valvelib.SCHEMA</font> and created with "
         "<font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font>; the view is declared "
         "separately in <font face=\"Courier\">V_STOCK_SQL</font> and rebuilt by "
@@ -692,6 +774,45 @@ def technical_manual():
         "different claim from <font face=\"Courier\">valve_type.equivalents</font>, which "
         "asserts something about the types themselves - so the two are deliberately not "
         "merged, and nothing writes one from the other."))
+    s.append(h2("valve - one row per individually-tracked physical valve"))
+    s.append(p(
+        "id, stock_id (FK to stock, ON DELETE CASCADE), position, serial, manufacturer, "
+        "condition, notes, added. Optional by design: a lot carries its own qty and works "
+        "perfectly well with no rows here at all, which is the right answer for a box of a "
+        "hundred identical indicators nobody will ever test one by one. "
+        "<font face=\"Courier\">expand_lot()</font> is the opt-in - it tops a lot up to one "
+        "row per valve held, and is idempotent, so a lot that already tracks some valves "
+        "keeps them and their history."))
+    s.append(p(
+        "Only the fields that genuinely vary within a lot live here. Type, box, origin and "
+        "the rest stay on the lot: a valve with a different origin is arguably a different "
+        "lot. manufacturer and condition are the exceptions - a lot of six can be four "
+        "Mullard and two GEC - so they can be set per valve and fall back to the lot's when "
+        "NULL."))
+    s.append(h2("valve_test - one row per test of one valve, or of one section"))
+    s.append(p(
+        "id, valve_id (FK to valve, ON DELETE CASCADE), tested_on, tester, section, then the "
+        "conditions (va, vg, bias_mode), the readings (ia, ig2, gm, gm_pct, emission_pct) "
+        "and the fault tests (gas_ua, insulation_mohm, heater_cathode, shorts, verdict), "
+        "plus notes. The column list is mirrored in "
+        "<font face=\"Courier\">valvelib.TEST_FIELDS</font>, which drives the CLI options, "
+        "the GUI form, the spreadsheet export and the snapshot - add a field there and to "
+        "SCHEMA and every one of those follows."))
+    s.append(p(
+        "A test is an event, not a property. Recording one always inserts; nothing updates "
+        "or replaces a previous reading, so a valve tested in 2019 and again today has two "
+        "rows and the trend between them is preserved. Every reading is nullable because no "
+        "single tester produces all of them. Units follow British practice - gm in mA/V, not "
+        "the micromhos an American tester shows (1 mA/V = 1000 umho) - since that is what "
+        "the collection and its testers are."))
+    s.append(note(
+        "section exists because a double triode reads separately per section and matching "
+        "one for phase-inverter use is exactly what those two readings are for. It is a "
+        "plain \u201ca\u201d/\u201cb\u201d text column rather than duplicated gm_a/gm_b "
+        "columns, so a valve with three sections, or one tested on only one of them, needs "
+        "no schema change. The consequence: a \u201clatest test\u201d lookup returns "
+        "whichever section was recorded last, so listings show one section and the history "
+        "shows both."))
     s.append(h2("socket - one row per lot of bases/sockets"))
     s.append(p(
         "base, box, qty, condition, notes. Split out from sundry deliberately, so a base type "
@@ -726,6 +847,26 @@ def technical_manual():
         "<font face=\"Courier\">CREATE VIEW IF NOT EXISTS</font> would leave an older "
         "database on an older definition for ever. Hence it lives in V_STOCK_SQL rather than "
         "SCHEMA, and migrate() drops and recreates it every time."))
+
+    s.append(h2("Keeping qty and the individual rows in step"))
+    s.append(p(
+        "<font face=\"Courier\">stock.qty</font> stays the authoritative count. A lot is "
+        "consistent when it has either no valve rows at all (not expanded) or exactly qty of "
+        "them, and the operations that change a quantity maintain that: "
+        "<font face=\"Courier\">take_from_lot()</font> reduces qty and deletes the same "
+        "number of valve rows, and ON DELETE CASCADE removes a lot's valves - and their "
+        "tests - when the lot goes."))
+    s.append(p(
+        "Which valve rows take_from_lot deletes is not arbitrary. It orders by how much is "
+        "recorded against each - untested before tested, unmarked before serial-numbered, "
+        "unplaced before placed - so using valves up never silently destroys test history. "
+        "That is a heuristic about which record is worth more, not a claim about which valve "
+        "left the box; where it matters, remove the specific valve first."))
+    s.append(p(
+        "<font face=\"Courier\">check_lots()</font> reports drift rather than correcting "
+        "it, and both front ends expose it (<font face=\"Courier\">valves.py check</font>, "
+        "Tools &gt; Check individual valve counts). Whether the quantity or the row count is "
+        "the truth is a judgement about the actual shelf, and not one to make in code."))
 
     s.append(h2("Migrations"))
     s.append(p(
@@ -886,7 +1027,18 @@ def technical_manual():
          "box/find/show."],
         ["import-csv FILE", "Bulk-add stock from a CSV (see upload_template.csv). Only type "
          "and box are required; any other column may be blank or absent."],
-        ["take TYPE [--qty --box]", "Remove stock you've used."],
+        ["lot LOT_ID", "Show a lot and the individual valves in it, with each one's "
+         "latest test."],
+        ["expand LOT_ID [--qty]", "Track a lot's valves individually, one row per valve. "
+         "Idempotent - only ever tops a lot up."],
+        ["valve VALVE_ID [--position --serial --maker --condition --notes]", "Show or edit "
+         "one individual valve and its test history."],
+        ["test VALVE_ID [--gm --ia --va --vg --tester --section ...]", "Record one test. "
+         "Every reading optional; always inserts, never overwrites."],
+        ["tests VALVE_ID", "That valve's full test history, newest first."],
+        ["check", "Lots whose individual rows and quantity disagree."],
+        ["take TYPE [--qty --box]", "Remove stock you've used; individual rows go too, least "
+         "documented first."],
         ["move TYPE --frm A --to B [--position]", "Move a type between boxes; the position "
          "is replaced or cleared, since it belonged to the old box."],
         ["bases [--base --box]", "List valve base/socket stock."],
@@ -940,6 +1092,10 @@ def technical_manual():
         "(drives the detail-panel form) and ALL_FIELDS in import_researched.py if research "
         "prompts should be able to fill it. Nothing else is needed: migrate() runs on every "
         "startup and applies the ALTER TABLE itself.",
+        "<b>New test reading</b> - add the column to the valve_test table in SCHEMA and an "
+        "entry to TEST_FIELDS in valvelib.py. The CLI option, the GUI form field, the "
+        "spreadsheet column and the snapshot column all derive from that list, so there is "
+        "nothing else to touch.",
         "<b>New per-lot field</b> - as above for the schema, then LOT_FIELDS in valves.py "
         "(the add/edit options and the CSV importer) and LOT_FIELDS in valves_gui.py (the "
         "Add stock and Edit lot forms). Add it to STOCK_SELECT/STOCK_COLS in valves_gui.py "
@@ -1057,20 +1213,39 @@ def upgrade_guide():
     s.append(p(
         "Adds six optional columns to the <font face=\"Courier\">stock</font> table - "
         "position, type1, type2, origin, test_values and other - so a lot can record where "
-        "in its box it sits, what else the valve is marked as, where it came from, and how "
-        "it tested. This is the first release to add columns to an existing table rather "
+        "in its box it sits, what else the valve is marked as, and where it came from. This "
+        "is the first release to add columns to an existing table rather "
         "than whole new tables, so it is the first to run an "
         "<font face=\"Courier\">ALTER TABLE</font> against your database. It still needs no "
         "manual steps: first launch adds the columns in place and leaves every existing "
         "value untouched, and the new columns start out empty on every lot you already "
         "have. Fill them in as and when it's worth it - blank is a perfectly normal value, "
         "and nothing else in the tool changes behaviour because of them."))
+    s.append(p(
+        "It also adds two new tables, <font face=\"Courier\">valve</font> (one row per "
+        "individually-tracked physical valve) and "
+        "<font face=\"Courier\">valve_test</font> (one row per test of one), created "
+        "automatically on first run like any other new table. Nothing about your existing "
+        "collection changes when they appear: every lot stays exactly as it was, held as a "
+        "quantity, until you expand one. See \u201cIndividual valves and testing\u201d in "
+        "the User Manual."))
+    s.append(note(
+        "One behaviour change worth knowing about even if you never expand a lot. "
+        "<b>Take</b> now removes individual valve records alongside the quantity, and "
+        "deleting a lot removes its valves and their tests. On a collection with nothing "
+        "expanded there is nothing to remove and Take behaves exactly as before - but once "
+        "you have recorded tests, a Take is the one thing that can discard them. It picks "
+        "the least documented valves first precisely to make that unlikely."))
     s.append(note(
         "Two things worth knowing if you script against the database yourself. The "
         "<font face=\"Courier\">v_stock</font> view is dropped and recreated on that first "
-        "launch, so any view of your own built <i>on top of</i> v_stock should be checked "
-        "afterwards. And <font face=\"Courier\">data/stock.csv</font> gains six columns, so "
-        "the first <font face=\"Courier\">snapshot.py</font> run after upgrading will show "
+        "launch - it gains position, the alternative designations, origin and an "
+        "<font face=\"Courier\">individuals</font> count - so any view of your own built "
+        "<i>on top of</i> v_stock should be checked afterwards. And "
+        "<font face=\"Courier\">data/stock.csv</font> gains six columns (plus two new "
+        "files, <font face=\"Courier\">valves.csv</font> and "
+        "<font face=\"Courier\">tests.csv</font>), so the first "
+        "<font face=\"Courier\">snapshot.py</font> run after upgrading will show "
         "a large diff for that file even if you've changed nothing - that's the header and "
         "the new empty fields, not lost data."))
     s.append(h2("v1.3"))

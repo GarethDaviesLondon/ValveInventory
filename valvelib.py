@@ -10,6 +10,9 @@ module is specific to either front end. It holds:
   to a table after its first release.
 - connect() / init_db() / migrate(): open a database connection, ensure the
   schema exists, and bring an older database up to the current one in place.
+- expand_lot() / take_from_lot() / check_lots() / lot_valves() /
+  record_test(): the operations over individually-tracked valves and their
+  test history, shared so both front ends treat a lot the same way.
 - norm(): normalise a free-text type designation into a canonical lookup
   key (valve_type.type_key).
 - classify(): given a normalised designation, guess the function, heater
@@ -80,6 +83,68 @@ CREATE TABLE IF NOT EXISTS stock (
     notes        TEXT
 );
 
+-- One row per individually-tracked physical valve, belonging to a stock lot.
+--
+-- Optional by design: a lot carries its own qty and works perfectly well with
+-- no rows here at all, which is the right answer for a box of a hundred
+-- identical indicators nobody will ever test one by one. Expanding a lot
+-- creates one row per valve it holds (see expand_lot), from which point each
+-- valve can carry its own shelf position, its own markings, and its own test
+-- history. stock.qty stays the authoritative count either way; the operations
+-- that change it keep these rows in step, and check_lots() reports any lot
+-- where the two have drifted apart.
+CREATE TABLE IF NOT EXISTS valve (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id     INTEGER NOT NULL REFERENCES stock(id) ON DELETE CASCADE,
+    position     TEXT,               -- where this one sits, e.g. "B-12"
+    serial       TEXT,               -- serial, date code or etch - how you tell it apart
+    manufacturer TEXT,               -- overrides the lot's, for a mixed lot
+    condition    TEXT,               -- overrides the lot's
+    notes        TEXT,
+    added        TEXT
+);
+
+-- One row per test of one valve - or of one SECTION of one valve, since a
+-- double triode reads separately per section and matching it for phase-inverter
+-- use is exactly what those two readings are for.
+--
+-- A test is an event, not a property: a valve tested in 2019 and again today
+-- has two rows here, and the trend between them is the useful part. Every
+-- reading is nullable because no single tester produces all of them - an
+-- emission tester gives one figure, an AVO VCM163 reads anode current and
+-- mutual conductance simultaneously plus separate gas and insulation tests,
+-- a curve tracer gives everything.
+--
+-- Units follow British practice throughout, since that is what the collection
+-- and its testers are: gm in mA/V, not the micromhos an American tester shows
+-- (1 mA/V = 1000 umho).
+CREATE TABLE IF NOT EXISTS valve_test (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    valve_id        INTEGER NOT NULL REFERENCES valve(id) ON DELETE CASCADE,
+    tested_on       TEXT,            -- ISO date
+    tester          TEXT,            -- "AVO VCM163", "uTracer 6", ...
+    section         TEXT,            -- "a"/"b" on a multi-section valve, else NULL
+    -- conditions the readings were taken under: a gm figure means nothing
+    -- without them, and the same valve reads differently under fixed and
+    -- auto bias
+    va              REAL,            -- anode volts at test
+    vg              REAL,            -- grid bias at test
+    bias_mode       TEXT,            -- fixed | auto
+    -- readings
+    ia              REAL,            -- anode (plate) current, mA
+    ig2             REAL,            -- screen current, mA
+    gm              REAL,            -- mutual conductance, mA/V
+    gm_pct          REAL,            -- gm as a percentage of the nominal figure
+    emission_pct    REAL,            -- an emission tester's single reading, %
+    -- fault tests
+    gas_ua          REAL,            -- gas / grid current, uA
+    insulation_mohm REAL,            -- interelectrode insulation, Mohm
+    heater_cathode  TEXT,            -- heater-cathode leakage: a figure, or pass/fail
+    shorts          TEXT,            -- interelectrode shorts: pass/fail
+    verdict         TEXT,            -- good | weak | short | failed | ...
+    notes           TEXT
+);
+
 -- Non-valve items: screening cans, crystals, chimneys - the general catch-all.
 CREATE TABLE IF NOT EXISTS sundry (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +197,8 @@ CREATE INDEX IF NOT EXISTS idx_stock_box  ON stock(box);
 CREATE INDEX IF NOT EXISTS idx_socket_base ON socket(base);
 CREATE INDEX IF NOT EXISTS idx_socket_box  ON socket(box);
 CREATE INDEX IF NOT EXISTS idx_document_type ON document(type_key);
+CREATE INDEX IF NOT EXISTS idx_valve_stock ON valve(stock_id);
+CREATE INDEX IF NOT EXISTS idx_valve_test_valve ON valve_test(valve_id);
 """
 
 # Convenience view: stock joined to its type reference data. Kept out of
@@ -143,10 +210,48 @@ CREATE VIEW v_stock AS
 SELECT s.id, s.box, s.position, s.qty, COALESCE(t.name, s.type_key) AS type,
        s.type_key, s.type1, s.type2, s.manufacturer, s.condition,
        s.origin, s.test_values, s.other,
+       (SELECT COUNT(*) FROM valve v WHERE v.stock_id = s.id) AS individuals,
        t.function, t.heater_v, t.pa_max, t.freq_max, t.base,
        t.datasheet_path, s.notes
 FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key;
 """
+
+# Everything a test can record, as (column, label, unit, kind). One list so the
+# CLI options, the GUI form, the spreadsheet export and the snapshot all describe
+# the same test the same way. Grouped in reading order: when it was done and
+# under what conditions, then what the meters said, then the fault tests.
+# The third element is a real unit or blank - never a hint, so it can be
+# appended to a value without checking. Anything a user needs telling about
+# the accepted values goes in the label, where a form shows it.
+TEST_FIELDS = [
+    ("tested_on", "Tested on", "", str),
+    ("tester", "Tester", "", str),
+    ("section", "Section (a/b, blank if single)", "", str),
+    ("va", "Va at test", "V", float),
+    ("vg", "Vg at test", "V", float),
+    ("bias_mode", "Bias mode (fixed/auto)", "", str),
+    ("ia", "Anode current Ia", "mA", float),
+    ("ig2", "Screen current Ig2", "mA", float),
+    ("gm", "Mutual conductance gm", "mA/V", float),
+    ("gm_pct", "gm as % of nominal", "%", float),
+    ("emission_pct", "Emission", "%", float),
+    ("gas_ua", "Gas / grid current", "uA", float),
+    ("insulation_mohm", "Insulation", "Mohm", float),
+    ("heater_cathode", "Heater-cathode (Mohm, or pass/fail)", "", str),
+    ("shorts", "Shorts (pass/fail)", "", str),
+    ("verdict", "Verdict (good/weak/short/failed)", "", str),
+    ("notes", "Notes", "", str),
+]
+
+# Fields an individual valve carries in its own right, as (column, label).
+# Everything else about it - type, box, origin - belongs to its lot.
+VALVE_FIELDS = [
+    ("position", "Position in box"),
+    ("serial", "Serial / date code"),
+    ("manufacturer", "Manufacturer"),
+    ("condition", "Condition"),
+    ("notes", "Notes"),
+]
 
 # Columns added to existing tables after their first release, applied by
 # migrate() to databases that predate them: table -> [(column, declaration)].
@@ -223,6 +328,137 @@ def init_db(path=DB_DEFAULT):
     con.executescript(SCHEMA)
     migrate(con)
     return con
+
+
+# --------------------------------------------------------------------------
+# Lots and the individual valves in them
+# --------------------------------------------------------------------------
+
+def expand_lot(con, stock_id, upto=None):
+    """Create individual valve rows for a lot until it has one per valve held.
+
+    Idempotent and additive: it only ever tops a lot up to `upto` (default the
+    lot's own qty), so running it twice creates nothing the second time, and a
+    lot that already has some individuals tracked keeps them and their test
+    history. Returns the number of rows created.
+
+    Nothing else in the tool requires a lot to be expanded - this is the step
+    that opts one lot in to per-valve tracking.
+    """
+    lot = con.execute("SELECT id, qty FROM stock WHERE id=?", (stock_id,)).fetchone()
+    if not lot:
+        return 0
+    want = lot["qty"] if upto is None else upto
+    have = con.execute("SELECT COUNT(*) c FROM valve WHERE stock_id=?", (stock_id,)).fetchone()["c"]
+    today = _today()
+    for _ in range(max(0, want - have)):
+        con.execute("INSERT INTO valve (stock_id, added) VALUES (?,?)", (stock_id, today))
+    con.commit()
+    return max(0, want - have)
+
+
+def take_from_lot(con, stock_id, n):
+    """Remove `n` valves from a lot, keeping its individual rows in step.
+
+    Reduces qty (deleting the lot outright when nothing is left) and, if the
+    lot has individual rows, deletes that many of them. Which ones: the least
+    documented first - untested before tested, unmarked before serial-numbered,
+    unplaced before placed - so using valves up never quietly destroys test
+    history you took the trouble to record. Deleting a valve row takes its
+    tests with it (ON DELETE CASCADE).
+
+    Returns the number actually taken, which is less than `n` if the lot
+    didn't hold that many.
+    """
+    lot = con.execute("SELECT id, qty FROM stock WHERE id=?", (stock_id,)).fetchone()
+    if not lot:
+        return 0
+    took = min(n, lot["qty"])
+    if took <= 0:
+        return 0
+    doomed = [r["id"] for r in con.execute("""
+        SELECT v.id FROM valve v WHERE v.stock_id = ?
+        ORDER BY (SELECT COUNT(*) FROM valve_test t WHERE t.valve_id = v.id),
+                 v.serial IS NOT NULL, v.position IS NOT NULL, v.id DESC
+        LIMIT ?""", (stock_id, took))]
+    for vid in doomed:
+        con.execute("DELETE FROM valve WHERE id=?", (vid,))
+    if took >= lot["qty"]:
+        con.execute("DELETE FROM stock WHERE id=?", (stock_id,))
+    else:
+        con.execute("UPDATE stock SET qty = qty - ? WHERE id=?", (took, stock_id))
+    con.commit()
+    return took
+
+
+def check_lots(con):
+    """Report lots whose individual valve rows have drifted out of step with qty.
+
+    A lot is consistent when it has either no individual rows at all (not
+    expanded - the normal state) or exactly qty of them. Anything else means
+    an edit went in that this module didn't mediate, so it's reported rather
+    than silently corrected: which side is right is a judgement about the
+    actual shelf, not one to make in code.
+
+    Returns a list of dicts with the lot id, type, box, qty and individual
+    count - empty when everything is in step.
+    """
+    return [dict(r) for r in con.execute("""
+        SELECT s.id, s.box, s.qty, COALESCE(t.name, s.type_key) AS type,
+               (SELECT COUNT(*) FROM valve v WHERE v.stock_id = s.id) AS individuals
+        FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
+        WHERE individuals NOT IN (0, s.qty)
+        ORDER BY CAST(s.box AS INTEGER), s.box""")]
+
+
+def lot_valves(con, stock_id):
+    """Return a lot's individual valves, each with a summary of its latest test.
+
+    The summary columns (last_tested, last_gm, last_ia, last_verdict, tests)
+    come from that valve's most recent valve_test row, so a listing can show
+    the current state of each valve without a second query per row. A valve
+    that has never been tested still appears, with those columns NULL and
+    tests = 0.
+    """
+    return [dict(r) for r in con.execute("""
+        SELECT v.*,
+               (SELECT COUNT(*) FROM valve_test t WHERE t.valve_id = v.id) AS tests,
+               lt.tested_on AS last_tested, lt.gm AS last_gm, lt.ia AS last_ia,
+               lt.gm_pct AS last_gm_pct, lt.verdict AS last_verdict
+        FROM valve v
+        LEFT JOIN valve_test lt ON lt.id = (
+            SELECT t.id FROM valve_test t WHERE t.valve_id = v.id
+            ORDER BY t.tested_on DESC, t.id DESC LIMIT 1)
+        WHERE v.stock_id = ?
+        ORDER BY v.position IS NULL, v.position, v.id""", (stock_id,))]
+
+
+def record_test(con, valve_id, values):
+    """Insert one valve_test row from a {column: value} dict, ignoring blanks.
+
+    Only keys named in TEST_FIELDS are written, so a caller can hand over a
+    whole form's worth of values without filtering first. tested_on defaults
+    to today when not given. Returns the new row's id.
+    """
+    cols = [c for c, _l, _u, _k in TEST_FIELDS
+            if values.get(c) is not None and values.get(c) != ""]
+    data = [values[c] for c in cols]
+    if "tested_on" not in cols:
+        cols.append("tested_on")
+        data.append(_today())
+    cols.append("valve_id")
+    data.append(valve_id)
+    cur = con.execute(
+        f"INSERT INTO valve_test ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", data)
+    con.commit()
+    return cur.lastrowid
+
+
+def _today():
+    """Today as an ISO date string. Local import so valvelib stays cheap to
+    import for the classifier-only callers that never touch a database."""
+    import datetime
+    return datetime.date.today().isoformat()
 
 
 # --------------------------------------------------------------------------

@@ -15,6 +15,7 @@ restore path. Deliberately does not touch the real valves.db -
 every check that needs a database uses a fresh file under tempfile.mkdtemp().
 """
 
+import datetime
 import os
 import sqlite3
 import subprocess
@@ -131,10 +132,77 @@ check("migration rebuilds the stale view", row["position"], None)
 check_true("migration is a no-op second time round", V.migrate(con) == [])
 con.close()
 
+# ---- individual valves and their test history ----------------------------
+con = V.init_db(db)
+lot = con.execute("SELECT id, qty FROM stock WHERE type_key='EL84'").fetchone()
+
+check("expand creates one row per valve held", V.expand_lot(con, lot["id"]), 4)
+check("expand is idempotent", V.expand_lot(con, lot["id"]), 0)
+valves = V.lot_valves(con, lot["id"])
+check("lot_valves returns them all", len(valves), 4)
+check("an untested valve reports no tests", valves[0]["tests"], 0)
+check("v_stock counts the individuals", con.execute(
+    "SELECT individuals FROM v_stock WHERE id=?", (lot["id"],)).fetchone()["individuals"], 4)
+
+# Document two of the four, so take_from_lot has something to protect.
+con.execute("UPDATE valve SET position='B-01', serial='AJ3 K7' WHERE id=?", (valves[0]["id"],))
+con.commit()
+V.record_test(con, valves[0]["id"], {
+    "tester": "AVO VCM163", "section": "a", "va": 250, "vg": -14, "ia": 36.0,
+    "gm": 6.2, "gm_pct": 88, "gas_ua": 2.0, "insulation_mohm": 50,
+    "shorts": "pass", "verdict": "good"})
+V.record_test(con, valves[0]["id"], {"tested_on": "2019-04-02", "gm": 7.1, "gm_pct": 101})
+V.record_test(con, valves[1]["id"], {"gm": 3.1, "verdict": "weak"})
+
+v = next(x for x in V.lot_valves(con, lot["id"]) if x["id"] == valves[0]["id"])
+check("a valve carries its whole test history", v["tests"], 2)
+check("the latest test is the one summarised", v["last_gm"], 6.2)
+check("an older test doesn't overwrite a newer one", v["last_tested"],
+      datetime.date.today().isoformat())
+
+# Readings are all optional - a test holding one figure is a valid record.
+one = con.execute("SELECT * FROM valve_test WHERE valve_id=? AND gm=3.1",
+                  (valves[1]["id"],)).fetchone()
+check("an unspecified reading stays empty", one["ia"], None)
+check("tested_on defaults to today", one["tested_on"], datetime.date.today().isoformat())
+
+check_true("a consistent lot is not reported", V.check_lots(con) == [])
+con.execute("UPDATE stock SET qty=9 WHERE id=?", (lot["id"],))
+con.commit()
+check("a drifted lot is reported", len(V.check_lots(con)), 1)
+con.execute("UPDATE stock SET qty=4 WHERE id=?", (lot["id"],))
+con.commit()
+
+# Taking valves removes the least documented first, so test history survives.
+check("take_from_lot takes what was asked", V.take_from_lot(con, lot["id"], 2), 2)
+left = V.lot_valves(con, lot["id"])
+check("the individual rows keep step with qty", len(left), 2)
+check("qty came down too", con.execute(
+    "SELECT qty FROM stock WHERE id=?", (lot["id"],)).fetchone()["qty"], 2)
+check_true("the tested valve was kept", any(x["tests"] == 2 for x in left))
+check_true("the still-consistent lot is not reported", V.check_lots(con) == [])
+
+# Deleting a valve takes its tests with it; emptying a lot takes its valves.
+kept = next(x for x in left if x["tests"] == 2)
+con.execute("DELETE FROM valve WHERE id=?", (kept["id"],))
+con.commit()
+check("deleting a valve cascades to its tests", con.execute(
+    "SELECT COUNT(*) c FROM valve_test WHERE valve_id=?", (kept["id"],)).fetchone()["c"], 0)
+V.take_from_lot(con, lot["id"], 99)
+check("emptying a lot removes the lot", con.execute(
+    "SELECT COUNT(*) c FROM stock WHERE id=?", (lot["id"],)).fetchone()["c"], 0)
+check("and its individual valves with it", con.execute(
+    "SELECT COUNT(*) c FROM valve WHERE stock_id=?", (lot["id"],)).fetchone()["c"], 0)
+con.close()
+
 # ---- CLI still runs ------------------------------------------------------
 here = os.path.dirname(os.path.abspath(__file__))
+cli = [sys.executable, os.path.join(here, "valves.py"), "--db", db]
+subprocess.run(cli + ["add", "EL84", "--box", "3", "--qty", "4", "--maker", "Mullard",
+                      "--position", "B-12", "--type1", "6BQ5", "--origin", "ex Bush DAC90"],
+               capture_output=True, text=True)
 for args in (["stats"], ["find", "EL84"], ["box", "3"],
-             ["search", "--function", "pentode"], ["gaps"],
+             ["search", "--function", "pentode"], ["gaps"], ["check"],
              ["search", "--position", "B-12"], ["search", "--alt", "6BQ5"],
              ["search", "--origin", "bush"], ["search", "--text", "bush"]):
     r = subprocess.run([sys.executable, os.path.join(here, "valves.py"), "--db", db] + args,
@@ -149,6 +217,7 @@ r = subprocess.run([sys.executable, os.path.join(here, "valves.py"), "--db", db,
 check("cli add with lot fields exits cleanly", r.returncode, 0)
 con = V.connect(db)
 lot = con.execute("SELECT * FROM stock WHERE type_key='GZ34'").fetchone()
+lot_id_gz34 = lot["id"]
 check("add stores the position", lot["position"], "A-01")
 check("add stores the alt designation", lot["type1"], "5AR4")
 check_true("add reports the lot id", f"lot {lot['id']}" in r.stdout)
@@ -168,6 +237,41 @@ r = subprocess.run([sys.executable, os.path.join(here, "valves.py"), "--db", db,
                     "edit", "999999"], capture_output=True, text=True)
 check("edit on a missing lot exits cleanly", r.returncode, 0)
 check_true("edit on a missing lot says so", "no lot with id" in r.stdout)
+
+# The per-valve commands, end to end as a user would run them: 'add' tracks a
+# new lot's valves individually, so there is something for 'lot' to list and
+# 'test' to record against.
+con = V.connect(db)
+vid = con.execute("SELECT v.id FROM valve v JOIN stock s ON s.id=v.stock_id "
+                  "WHERE s.type_key='GZ34'").fetchone()
+con.close()
+check_true("add tracks a new lot's valves individually", vid is not None)
+if vid:
+    for args, label in (
+            (["lot", str(lot_id_gz34)], "lot lists a lot's valves"),
+            (["expand", str(lot_id_gz34)], "expand re-runs harmlessly"),
+            (["valve", str(vid["id"]), "--position", "B-01", "--serial", "AJ3 K7"],
+             "valve edits one individual"),
+            (["test", str(vid["id"]), "--gm", "6.2", "--ia", "36", "--tester", "AVO VCM163",
+              "--va", "250", "--vg", "-14", "--verdict", "good"], "test records a reading"),
+            (["tests", str(vid["id"])], "tests prints the history"),
+            (["check"], "check reports consistency")):
+        r = subprocess.run([sys.executable, os.path.join(here, "valves.py"), "--db", db] + args,
+                           capture_output=True, text=True)
+        check(f"cli {label}", r.returncode, 0)
+    con = V.connect(db)
+    v = con.execute("SELECT * FROM valve WHERE id=?", (vid["id"],)).fetchone()
+    check("valve stored the position", v["position"], "B-01")
+    t = con.execute("SELECT * FROM valve_test WHERE valve_id=?", (vid["id"],)).fetchone()
+    check("test stored the mutual conductance", t["gm"], 6.2)
+    check("test stored the conditions it was taken under", t["va"], 250.0)
+    check_true("check is quiet when everything is in step", not V.check_lots(con))
+    con.close()
+
+r = subprocess.run([sys.executable, os.path.join(here, "valves.py"), "--db", db,
+                    "valve", "999999"], capture_output=True, text=True)
+check("valve on a missing id exits cleanly", r.returncode, 0)
+check_true("valve on a missing id says so", "no valve with id" in r.stdout)
 
 # ---- snapshot / restore --------------------------------------------------
 if os.path.exists(os.path.join(here, "data", "valves.sql")):

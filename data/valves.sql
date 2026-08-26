@@ -448,6 +448,42 @@ CREATE TABLE sundry (
 INSERT INTO "sundry" VALUES(1,'11','100khz xtal',1,'');
 INSERT INTO "sundry" VALUES(2,'15','Socket',2,'4cx250B');
 INSERT INTO "sundry" VALUES(3,'27','data',1,'');
+CREATE TABLE valve (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id     INTEGER NOT NULL REFERENCES stock(id) ON DELETE CASCADE,
+    position     TEXT,               -- where this one sits, e.g. "B-12"
+    serial       TEXT,               -- serial, date code or etch - how you tell it apart
+    manufacturer TEXT,               -- overrides the lot's, for a mixed lot
+    condition    TEXT,               -- overrides the lot's
+    notes        TEXT,
+    added        TEXT
+);
+CREATE TABLE valve_test (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    valve_id        INTEGER NOT NULL REFERENCES valve(id) ON DELETE CASCADE,
+    tested_on       TEXT,            -- ISO date
+    tester          TEXT,            -- "AVO VCM163", "uTracer 6", ...
+    section         TEXT,            -- "a"/"b" on a multi-section valve, else NULL
+    -- conditions the readings were taken under: a gm figure means nothing
+    -- without them, and the same valve reads differently under fixed and
+    -- auto bias
+    va              REAL,            -- anode volts at test
+    vg              REAL,            -- grid bias at test
+    bias_mode       TEXT,            -- fixed | auto
+    -- readings
+    ia              REAL,            -- anode (plate) current, mA
+    ig2             REAL,            -- screen current, mA
+    gm              REAL,            -- mutual conductance, mA/V
+    gm_pct          REAL,            -- gm as a percentage of the nominal figure
+    emission_pct    REAL,            -- an emission tester's single reading, %
+    -- fault tests
+    gas_ua          REAL,            -- gas / grid current, uA
+    insulation_mohm REAL,            -- interelectrode insulation, Mohm
+    heater_cathode  TEXT,            -- heater-cathode leakage: a figure, or pass/fail
+    shorts          TEXT,            -- interelectrode shorts: pass/fail
+    verdict         TEXT,            -- good | weak | short | failed | ...
+    notes           TEXT
+);
 CREATE TABLE valve_type (
     type_key       TEXT PRIMARY KEY,   -- normalised: uppercase, alnum only
     name           TEXT NOT NULL,      -- display name, e.g. "ECC83"
@@ -852,10 +888,13 @@ CREATE INDEX idx_stock_box  ON stock(box);
 CREATE INDEX idx_socket_base ON socket(base);
 CREATE INDEX idx_socket_box  ON socket(box);
 CREATE INDEX idx_document_type ON document(type_key);
+CREATE INDEX idx_valve_stock ON valve(stock_id);
+CREATE INDEX idx_valve_test_valve ON valve_test(valve_id);
 CREATE VIEW v_stock AS
 SELECT s.id, s.box, s.position, s.qty, COALESCE(t.name, s.type_key) AS type,
        s.type_key, s.type1, s.type2, s.manufacturer, s.condition,
        s.origin, s.test_values, s.other,
+       (SELECT COUNT(*) FROM valve v WHERE v.stock_id = s.id) AS individuals,
        t.function, t.heater_v, t.pa_max, t.freq_max, t.base,
        t.datasheet_path, s.notes
 FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key;

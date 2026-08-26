@@ -62,7 +62,25 @@ sits and where it came from: `position` (a grid reference within the box, like
 the columns out of your CSV entirely, if they're not how you work. Fill them
 in later with "Edit lot" in the GUI, or `valves.py edit <lot id>`.
 
-## 6. Filling in reference data
+## 6. Tracking valves one by one
+
+A lot is a quantity - "6 x KT66 in box 8" - and for most of a collection
+that's all it needs to be. Where you want more, expand the lot into one row
+per valve: each then has its own position on the shelf, its own serial or
+date code, and its own test history.
+
+```bash
+python3 valves.py expand 417                  # 6 x KT66 becomes 6 valve rows
+python3 valves.py valve 22 --position B-01 --serial 'AJ3 K7'
+python3 valves.py test 22 --gm 6.2 --ia 36 --tester 'AVO VCM163' --va 250 --vg -14
+python3 valves.py lot 417                     # what's where, and what it measured
+```
+
+In the window it's "Individual valves..." on the Valves tab. Readings are all
+optional and a retest never overwrites an older one - see `README.md` for the
+full list of what a test can record.
+
+## 7. Filling in reference data
 
 New types start with only what the naming convention can infer - a real
 datasheet reading is what actually confirms them. `valves.py gaps` (or
@@ -73,7 +91,7 @@ that asks Claude to research whatever's still unconfirmed and hand back
 data in a format `import_researched.py` can apply directly - see that
 menu item for the exact steps.
 
-## 7. This is someone else's collection, not a blank slate
+## 8. This is someone else's collection, not a blank slate
 
 The database you just restored is whoever exported it to you - real box
 locations in someone else's attic, not sample data. If you're starting your

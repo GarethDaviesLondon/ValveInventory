@@ -4,8 +4,9 @@ valves.py - valve stock inventory.
 
 Command-line front end for the inventory: an argparse-based CLI with one
 cmd_*(con, a) function per subcommand (box, find, show, search, add, edit,
-take, move, bases, sock-add, sock-take, sock-move, set, merge, dupes, scan,
-sheet, gaps, stats, export, import-csv). Each cmd_* function takes an open sqlite3
+take, move, lot, expand, valve, test, tests, check, bases, sock-add,
+sock-take, sock-move, set, merge, dupes, scan, sheet, gaps, stats, export,
+import-csv). Each cmd_* function takes an open sqlite3
 connection (`con`, row_factory=sqlite3.Row - see valvelib.init_db) and the
 parsed argparse Namespace (`a`), and is responsible for its own commit().
 
@@ -18,8 +19,12 @@ belongs in valvelib.
   valves.py find KT66               which boxes hold KT66 (follows equivalents)
   valves.py search --function pentode --heater 6.3 --pa '>20'
   valves.py add EL34 --box 1 --qty 4 --maker Svetlana --position B-12
-  valves.py edit 417 --origin 'ex Bush DAC90' --test 'gm 9.8 mA/V'
+  valves.py edit 417 --origin 'ex Bush DAC90'
   valves.py take EL34 --box 1 --qty 2
+  valves.py expand 417              track that lot's valves one row each
+  valves.py lot 417                 which valve is where, and what it measured
+  valves.py valve 22 --position B-01 --serial 'AJ3 K7'
+  valves.py test 22 --gm 6.2 --ia 36 --tester 'AVO VCM163' --va 250 --vg -14
   valves.py show ECC83              full reference record
   valves.py set ECC83 --pa 1.2 --mu 100 --base B9A --confirm
   valves.py sheet ECC83             open the local datasheet
@@ -134,13 +139,14 @@ def cmd_box(con, a):
     which is what 'edit' takes to change one.
     """
     rows = [dict(r) for r in con.execute(
-        "SELECT id, position, type, type1, type2, qty, manufacturer, condition, "
-        "origin, function, notes FROM v_stock WHERE box=? COLLATE NOCASE "
+        "SELECT id, position, type, type1, type2, qty, individuals, manufacturer, "
+        "condition, origin, function, notes FROM v_stock WHERE box=? COLLATE NOCASE "
         "ORDER BY position IS NULL, position, type", (a.box,))]
     total = sum(r["qty"] for r in rows)
     print(f"\nBox {a.box} - {len(rows)} lots, {total} valves\n")
     table(rows, shown(rows, ["id", "position", "type", "type1", "type2", "qty",
-                             "manufacturer", "condition", "origin", "function"],
+                             "individuals", "manufacturer", "condition", "origin",
+                             "function"],
                       always={"id", "type", "qty", "manufacturer", "condition", "function"}))
     sund = [dict(r) for r in con.execute(
         "SELECT description, qty FROM sundry WHERE box=? COLLATE NOCASE", (a.box,))]
@@ -290,6 +296,11 @@ def cmd_add(con, a):
     box listings even before it has a real location note. The per-lot detail
     fields (LOT_FIELDS - position, type1/type2, origin, test values, other)
     are all optional and can equally be filled in afterwards with 'edit'.
+
+    A new lot is expanded into individual valve rows straight away unless
+    --no-individual says otherwise, so per-valve positions and test history
+    are available from the start. Bulk import (import-csv) is the other way
+    round - see there.
     """
     key = V.norm(a.type)
     exists = con.execute("SELECT 1 FROM valve_type WHERE type_key=?", (key,)).fetchone()
@@ -310,9 +321,14 @@ def cmd_add(con, a):
          datetime.date.today().isoformat(), a.notes))
     con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.box, "attic"))
     con.commit()
+    lot_id = cur.lastrowid
+    made = 0 if a.no_individual else V.expand_lot(con, lot_id)
     print(f"added {a.qty} x {a.type} to box {a.box}"
           + (f", position {a.position}" if a.position else "")
-          + f"  (lot {cur.lastrowid} - use 'edit {cur.lastrowid}' to change it)")
+          + f"  (lot {lot_id} - use 'edit {lot_id}' to change it)")
+    if made:
+        print(f"  tracking its {made} valve(s) individually - 'valves.py lot {lot_id}' "
+              f"lists them, 'valves.py test <valve id> ...' records a test")
 
 
 def cmd_edit(con, a):
@@ -359,6 +375,200 @@ def cmd_edit(con, a):
     print()
 
 
+# ------------------------------------------- individual valves and testing
+
+def cmd_lot(con, a):
+    """Show one stock lot and, if it tracks them, the individual valves in it.
+
+    This is the per-valve view: which valve sits where in the box, how each
+    one is marked, and what it last measured. A lot that hasn't been expanded
+    says so and prints the command that would do it.
+    """
+    r = con.execute("SELECT * FROM v_stock WHERE id=?", (a.id,)).fetchone()
+    if not r:
+        print(f"no lot with id {a.id} - lot ids are shown by 'box', 'find' and 'show'")
+        return
+    print(f"\nlot {r['id']}: {r['qty']} x {r['type']} in box {r['box']}"
+          + (f", position {r['position']}" if r["position"] else ""))
+    for col, _opt, label in LOT_FIELDS:
+        if col != "position" and r[col]:
+            print(f"  {label:<12} {r[col]}")
+    for col, label in (("manufacturer", "Maker"), ("condition", "Condition"),
+                       ("notes", "Notes")):
+        if r[col]:
+            print(f"  {label:<12} {r[col]}")
+
+    valves = V.lot_valves(con, a.id)
+    if not valves:
+        print(f"\n  not tracked individually - 'valves.py expand {a.id}' creates "
+              f"{r['qty']} valve rows, one per valve held\n")
+        return
+    print(f"\n  {len(valves)} valve(s) tracked individually:\n")
+    rows = [{"valve": v["id"], "position": v["position"], "serial": v["serial"],
+             "maker": v["manufacturer"], "condition": v["condition"],
+             "tests": v["tests"] or "", "tested": v["last_tested"],
+             "gm": v["last_gm"], "%": v["last_gm_pct"], "ia": v["last_ia"],
+             "verdict": v["last_verdict"]} for v in valves]
+    table(rows, shown(rows, ["valve", "position", "serial", "maker", "condition",
+                             "tests", "tested", "gm", "%", "ia", "verdict"],
+                      always={"valve", "position", "tests"}))
+    if len(valves) != r["qty"]:
+        print(f"\n  note: qty says {r['qty']} but {len(valves)} are tracked "
+              f"- 'valves.py expand {a.id}' tops them up")
+    print()
+
+
+def cmd_expand(con, a):
+    """Create individual valve rows for a lot, one per valve it holds.
+
+    The opt-in step for per-valve tracking: until a lot is expanded it stays
+    a single row with a quantity, which is the right answer for a box of
+    identical valves nobody will test one by one. Safe to re-run - it only
+    tops a lot up, never duplicates or resets what's already there.
+    """
+    lot = con.execute("SELECT * FROM v_stock WHERE id=?", (a.id,)).fetchone()
+    if not lot:
+        print(f"no lot with id {a.id}")
+        return
+    made = V.expand_lot(con, a.id, upto=a.qty)
+    total = len(V.lot_valves(con, a.id))
+    if made:
+        print(f"lot {a.id} ({lot['qty']} x {lot['type']}, box {lot['box']}): "
+              f"created {made} valve row(s), {total} now tracked individually")
+        print(f"  'valves.py lot {a.id}' lists them; "
+              f"'valves.py valve <id> --position B-01' places one")
+    else:
+        print(f"lot {a.id} already tracks all {total} of its valves individually")
+
+
+def cmd_valve(con, a):
+    """Show one individual valve and its test history, or edit its own fields.
+
+    With no options it prints the valve; with any of them it updates just
+    those and prints the result. A valve's type, box and origin come from its
+    lot - what it carries in its own right is where it sits, how it's marked,
+    and (where a lot is mixed) its own maker and condition.
+    """
+    v = con.execute("""SELECT v.*, s.box, s.qty, COALESCE(t.name, s.type_key) AS type,
+                              s.manufacturer AS lot_maker, s.condition AS lot_condition
+                       FROM valve v JOIN stock s ON s.id = v.stock_id
+                       LEFT JOIN valve_type t ON t.type_key = s.type_key
+                       WHERE v.id=?""", (a.id,)).fetchone()
+    if not v:
+        print(f"no valve with id {a.id} - valve ids are shown by 'lot'")
+        return
+    fields, args = [], []
+    for col, opt in (("position", "position"), ("serial", "serial"),
+                     ("manufacturer", "maker"), ("condition", "condition"),
+                     ("notes", "notes")):
+        val = getattr(a, opt, None)
+        if val is not None:
+            fields.append(f"{col}=?")
+            args.append(val or None)      # "" clears the field
+    if fields:
+        con.execute(f"UPDATE valve SET {','.join(fields)} WHERE id=?", args + [a.id])
+        con.commit()
+        v = con.execute("""SELECT v.*, s.box, COALESCE(t.name, s.type_key) AS type,
+                                  s.manufacturer AS lot_maker, s.condition AS lot_condition
+                           FROM valve v JOIN stock s ON s.id = v.stock_id
+                           LEFT JOIN valve_type t ON t.type_key = s.type_key
+                           WHERE v.id=?""", (a.id,)).fetchone()
+
+    print(f"\nvalve {v['id']}: {v['type']} in box {v['box']}"
+          + (f", position {v['position']}" if v["position"] else "")
+          + f"   (lot {v['stock_id']})")
+    for col, label in (("serial", "Serial"), ("manufacturer", "Maker"),
+                       ("condition", "Condition"), ("notes", "Notes")):
+        val = v[col] or (v["lot_maker"] if col == "manufacturer" else
+                         v["lot_condition"] if col == "condition" else None)
+        if val:
+            print(f"  {label:<10} {val}" + ("   (from the lot)" if not v[col] else ""))
+    print_tests(con, a.id)
+
+
+def print_tests(con, valve_id):
+    """Print a valve's test history, newest first - shared by 'valve' and 'tests'."""
+    rows = [dict(r) for r in con.execute(
+        "SELECT * FROM valve_test WHERE valve_id=? ORDER BY tested_on DESC, id DESC",
+        (valve_id,))]
+    if not rows:
+        print("\n  never tested - 'valves.py test <valve id> --gm 6.2 --ia 36' records one\n")
+        return
+    print(f"\n  {len(rows)} test(s), newest first:\n")
+    cols = ["tested_on", "tester", "section", "va", "vg", "bias_mode", "ia", "ig2",
+            "gm", "gm_pct", "emission_pct", "gas_ua", "insulation_mohm",
+            "heater_cathode", "shorts", "verdict"]
+    table(rows, shown(rows, cols, always={"tested_on", "gm", "ia", "verdict"}))
+    for r in rows:
+        if r["notes"]:
+            print(f"    {r['tested_on']}: {r['notes']}")
+    print()
+
+
+def cmd_tests(con, a):
+    """Print one valve's full test history - the same block 'valve' ends with."""
+    if not con.execute("SELECT 1 FROM valve WHERE id=?", (a.id,)).fetchone():
+        print(f"no valve with id {a.id}")
+        return
+    print_tests(con, a.id)
+
+
+def cmd_test(con, a):
+    """Record a test of one valve, or of one section of it.
+
+    Every reading is optional: no single tester produces all of them, and a
+    row holding nothing but a gm figure and a date is a perfectly good record.
+    A double triode is tested a section at a time - pass --section a and
+    --section b as two separate tests, which is how the readings come off the
+    meter and how they need to be compared for matching.
+
+    Readings are never overwritten: each test is a new row, so retesting the
+    same valve years later builds the history rather than replacing it.
+    """
+    v = con.execute("""SELECT v.id, v.position, s.box, COALESCE(t.name, s.type_key) AS type
+                       FROM valve v JOIN stock s ON s.id = v.stock_id
+                       LEFT JOIN valve_type t ON t.type_key = s.type_key
+                       WHERE v.id=?""", (a.id,)).fetchone()
+    if not v:
+        print(f"no valve with id {a.id} - valve ids are shown by 'lot'")
+        return
+    values = {col: getattr(a, col, None) for col, _l, _u, _k in V.TEST_FIELDS}
+    if not any(val is not None for col, val in values.items() if col != "tested_on"):
+        print("nothing to record - pass at least one reading ('test --help' lists them)")
+        return
+    test_id = V.record_test(con, a.id, values)
+    r = con.execute("SELECT * FROM valve_test WHERE id=?", (test_id,)).fetchone()
+    print(f"\nrecorded test {test_id} of valve {a.id} ({v['type']}, box {v['box']}"
+          + (f", position {v['position']}" if v["position"] else "") + ")")
+    for col, label, unit, _kind in V.TEST_FIELDS:
+        if r[col] is not None:
+            print(f"  {label:<36} {r[col]}" + (f" {unit}" if unit else ""))
+    print()
+
+
+def cmd_check(con, a):
+    """Report lots whose individual valve rows disagree with their quantity.
+
+    Consistent means a lot has either none of them (not tracked individually)
+    or exactly qty. Anything else is printed rather than fixed: whether the
+    count or the quantity is the truth depends on what's actually on the
+    shelf.
+    """
+    bad = V.check_lots(con)
+    if not bad:
+        n = con.execute("SELECT COUNT(*) c FROM valve").fetchone()["c"]
+        lots = con.execute(
+            "SELECT COUNT(DISTINCT stock_id) c FROM valve").fetchone()["c"]
+        tests = con.execute("SELECT COUNT(*) c FROM valve_test").fetchone()["c"]
+        print(f"all lots consistent - {n} valve(s) tracked individually across "
+              f"{lots} lot(s), {tests} test(s) recorded")
+        return
+    print(f"\n{len(bad)} lot(s) where the individual rows and the quantity disagree:\n")
+    table(bad, ["id", "box", "type", "qty", "individuals"])
+    print("\n  'valves.py expand <lot id>' tops a lot up to its quantity;")
+    print("  'valves.py edit <lot id> --qty N' sets the quantity instead.\n")
+
+
 def cmd_import_csv(con, a):
     """Bulk-add stock from a CSV (see upload_template.csv for the columns).
 
@@ -366,6 +576,11 @@ def cmd_import_csv(con, a):
     per-lot detail fields (LOT_FIELDS), is optional and may be left out of
     the file altogether - a CSV written for an older version still imports
     unchanged.
+
+    Unlike 'add', this does NOT expand lots into individual valve rows unless
+    --individual asks for it: importing a whole collection is exactly where
+    that turns a few hundred rows into a few thousand, so it's a decision to
+    make deliberately rather than a side effect of loading a spreadsheet.
     """
     import csv
     added_types = added_lots = 0
@@ -398,13 +613,16 @@ def cmd_import_csv(con, a):
                     (key, t, inf.get("function"), inf.get("family"),
                      inf.get("heater_v"), inf.get("heater_a")))
                 added_types += 1
-            con.execute(
+            cur = con.execute(
                 """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes,
                                       position,type1,type2,origin,test_values,other)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [key, box, qty, maker, condition, datetime.date.today().isoformat(), notes]
                 + extra)
+            lot_id = cur.lastrowid      # read before the box upsert moves it
             con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (box, "attic"))
+            if a.individual:
+                V.expand_lot(con, lot_id)
             added_lots += 1
     con.commit()
     print(f"imported {added_lots} lots ({added_types} new types)")
@@ -419,7 +637,8 @@ def cmd_take(con, a):
     from whichever type sorts first - pass an exact name if that matters.
     Largest-lot-first minimises the number of lots touched (and avoids
     leaving lots too small to be worth tracking) rather than draining lots
-    in box or date order.
+    in box or date order. Where a lot tracks its valves individually,
+    V.take_from_lot picks the least documented ones to remove - see there.
     """
     keys = resolve(con, a.type)
     if not keys:
@@ -436,16 +655,13 @@ def cmd_take(con, a):
     for r in rows:
         if left <= 0:
             break
-        take = min(left, r["qty"])
-        if take == r["qty"]:
-            con.execute("DELETE FROM stock WHERE id=?", (r["id"],))
-        else:
-            con.execute("UPDATE stock SET qty=qty-? WHERE id=?", (take, r["id"]))
+        take = V.take_from_lot(con, r["id"], left)
+        if not take:
+            continue
         print(f"  took {take} from box {r['box']}")
         left -= take
     if left:
         print(f"  short by {left}")
-    con.commit()
 
 
 def cmd_move(con, a):
@@ -463,8 +679,12 @@ def cmd_move(con, a):
         # a position is only meaningful within its own box, so moving to a new
         # box either takes a new one or clears the old one rather than
         # carrying a stale reference across
+        moved = [r["id"] for r in con.execute(
+            "SELECT id FROM stock WHERE type_key=? AND box=? COLLATE NOCASE", (keys[0], a.frm))]
         con.execute("UPDATE stock SET box=?, position=? WHERE type_key=? AND box=? COLLATE NOCASE",
                     (a.to, a.position or None, keys[0], a.frm))
+        for lot_id in moved:      # individual positions belonged to the old box too
+            con.execute("UPDATE valve SET position=NULL WHERE stock_id=?", (lot_id,))
     con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.to, "attic"))
     con.commit()
     print(f"moved {keys[0]} from box {a.frm} to box {a.to}"
@@ -729,7 +949,7 @@ def cmd_stats(con, a):
 
 
 def cmd_export(con, a):
-    """Write the full inventory to an .xlsx workbook with Stock, Types, and Other items sheets, formatted with bold headers, frozen header row, and auto-sized columns.
+    """Write the full inventory to an .xlsx workbook with Stock, Types, Other items, Valves, and Tests sheets, formatted with bold headers, frozen header row, and auto-sized columns.
 
     Text fields are truncated to 300 characters per cell to keep the file
     manageable; column widths are sampled from the first 400 rows of each
@@ -771,6 +991,42 @@ def cmd_export(con, a):
     ws3.append(["Box", "Description", "Qty", "Notes"])
     for r in con.execute("SELECT box, description, qty, notes FROM sundry"):
         ws3.append(list(r))
+
+    # One row per individually-tracked valve, and one per test of one. Both
+    # sheets are written even when empty, so the workbook's shape doesn't
+    # depend on whether anything has been expanded yet.
+    ws4 = wb.create_sheet("Valves")
+    ws4.append(["Valve", "Lot", "Box", "Type", "Position", "Serial", "Manufacturer",
+                "Condition", "Tests", "Last tested", "Last gm mA/V", "Last Ia mA",
+                "Last % nominal", "Last verdict", "Notes"])
+    for r in con.execute("""
+            SELECT v.id, v.stock_id, s.box, COALESCE(t.name, s.type_key),
+                   v.position, v.serial, COALESCE(v.manufacturer, s.manufacturer),
+                   COALESCE(v.condition, s.condition),
+                   (SELECT COUNT(*) FROM valve_test x WHERE x.valve_id = v.id),
+                   lt.tested_on, lt.gm, lt.ia, lt.gm_pct, lt.verdict, v.notes
+            FROM valve v
+            JOIN stock s ON s.id = v.stock_id
+            LEFT JOIN valve_type t ON t.type_key = s.type_key
+            LEFT JOIN valve_test lt ON lt.id = (
+                SELECT x.id FROM valve_test x WHERE x.valve_id = v.id
+                ORDER BY x.tested_on DESC, x.id DESC LIMIT 1)
+            ORDER BY CAST(s.box AS INTEGER), s.box, v.position IS NULL, v.position, v.id"""):
+        ws4.append([(x[:300] if isinstance(x, str) else x) for x in r])
+
+    ws5 = wb.create_sheet("Tests")
+    ws5.append(["Test", "Valve", "Box", "Type", "Position"]
+               + [f"{label}{' ' + unit if unit else ''}"
+                  for _c, label, unit, _k in V.TEST_FIELDS])
+    test_cols = ",".join("t." + c for c, _l, _u, _k in V.TEST_FIELDS)
+    for r in con.execute(f"""
+            SELECT t.id, v.id, s.box, COALESCE(vt.name, s.type_key), v.position, {test_cols}
+            FROM valve_test t
+            JOIN valve v ON v.id = t.valve_id
+            JOIN stock s ON s.id = v.stock_id
+            LEFT JOIN valve_type vt ON vt.type_key = s.type_key
+            ORDER BY t.tested_on DESC, t.id DESC"""):
+        ws5.append([(x[:300] if isinstance(x, str) else x) for x in r])
 
     for sh in wb.worksheets:
         for c in sh[1]:
@@ -859,6 +1115,8 @@ def main():
     s.add_argument("type"); s.add_argument("--box", required=True)
     s.add_argument("--qty", type=int, default=1); s.add_argument("--maker")
     s.add_argument("--condition"); s.add_argument("--notes")
+    s.add_argument("--no-individual", action="store_true",
+                   help="don't create a row per valve; keep the lot as a single quantity")
     add_lot_options(s)
     s.set_defaults(fn=cmd_add)
 
@@ -870,7 +1128,42 @@ def main():
     s.set_defaults(fn=cmd_edit)
 
     s = sub.add_parser("import-csv", help="bulk-add stock from a CSV (see upload_template.csv)")
-    s.add_argument("file"); s.set_defaults(fn=cmd_import_csv)
+    s.add_argument("file")
+    s.add_argument("--individual", action="store_true",
+                   help="also track every imported valve individually (one row each)")
+    s.set_defaults(fn=cmd_import_csv)
+
+    # ---- individual valves and their test history ----
+    s = sub.add_parser("lot", help="show a lot and the individual valves in it")
+    s.add_argument("id", type=int, help="lot id, from the ID column of box/find/show")
+    s.set_defaults(fn=cmd_lot)
+
+    s = sub.add_parser("expand", help="track a lot's valves individually, one row per valve")
+    s.add_argument("id", type=int, help="lot id")
+    s.add_argument("--qty", type=int, help="how many rows to have (default: the lot's qty)")
+    s.set_defaults(fn=cmd_expand)
+
+    s = sub.add_parser("valve", help="show or edit one individual valve")
+    s.add_argument("id", type=int, help="valve id, from the VALVE column of 'lot'")
+    s.add_argument("--position", help="where in the box this one sits, e.g. B-01")
+    s.add_argument("--serial", help="serial, date code or etch mark")
+    s.add_argument("--maker", help="this valve's maker, if the lot is mixed")
+    s.add_argument("--condition"); s.add_argument("--notes")
+    s.set_defaults(fn=cmd_valve)
+
+    s = sub.add_parser("test", help="record a test of one valve (or of one section)")
+    s.add_argument("id", type=int, help="valve id, from the VALVE column of 'lot'")
+    for col, label, unit, kind in V.TEST_FIELDS:
+        s.add_argument("--" + col.replace("_", "-"), dest=col,
+                       type=float if kind is float else str,
+                       help=label + (f" ({unit})" if unit else ""))
+    s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("tests", help="a valve's test history")
+    s.add_argument("id", type=int, help="valve id"); s.set_defaults(fn=cmd_tests)
+
+    s = sub.add_parser("check", help="lots whose individual rows disagree with their qty")
+    s.set_defaults(fn=cmd_check)
 
     s = sub.add_parser("take", help="remove stock you have used")
     s.add_argument("type"); s.add_argument("--qty", type=int, default=1)
