@@ -438,8 +438,55 @@ def user_manual():
     s.append(h2("Toolbar"))
     s.append(p(
         "<b>Add stock</b> creates the type automatically if it's new, classifying it from "
-        "its designation. <b>Take</b>, <b>Move</b>, and <b>Delete lot</b> act on the "
-        "selected row."))
+        "its designation. <b>Edit lot</b>, <b>Take</b>, <b>Move</b>, and <b>Delete lot</b> "
+        "act on the selected row. <b>Move</b> also offers a position in the destination box; "
+        "leaving it blank clears the old one, which belonged to the box the lot has just "
+        "left."))
+    s.append(note(
+        "The two editors either side of the results table do different jobs. <b>Edit lot</b> "
+        "changes this one physical lot - where it is, what it came from, how it tested. The "
+        "panel on the right changes the reference record shared by <i>every</i> lot of that "
+        "type."))
+
+    s.append(h1("What a lot records"))
+    s.append(p(
+        "A lot is one physical batch: this many of this type, in this box. Two Mullard EL84s "
+        "out of different sets are one <i>type</i> but two <i>lots</i>, and it's the lot that "
+        "knows which shelf it sits on and which set it came out of. Beyond quantity, "
+        "manufacturer and condition, each lot can record:"))
+    s.append(table([
+        ["Field", "What goes in it"],
+        ["Position", "Where in the box it sits, as a grid reference - B-12, row and column."],
+        ["Type 1 / Type 2", "Other designations the valve is marked with: a US number, a "
+                            "service code, a second maker's part number."],
+        ["Origin", "Where it came from - bought, inherited, or the set it came out of."],
+        ["Test values", "What it measured on a tester."],
+        ["Other", "Anything else: boxed or unboxed, odd printing, whatever the row needs."],
+    ], [100, 340]))
+    s.append(p(
+        "<b>Every one of them is optional</b>, and blank is a perfectly normal value - none "
+        "of them changes how anything else behaves. Fill them in from <b>Add stock</b>, from "
+        "<b>Edit lot</b> afterwards, from the upload CSV, or from the command line with "
+        "<font face=\"Courier\">valves.py add</font> / <font face=\"Courier\">valves.py "
+        "edit</font>."))
+    s.append(p(
+        "Type 1 and Type 2 sit on the lot rather than the type on purpose: they record what "
+        "<i>this</i> glass is actually marked with, which is not always the designation you "
+        "file it under. They're searchable either way, so a valve stored as EL84 and printed "
+        "6BQ5 is found by either name. That's separate from the type record's "
+        "<i>equivalents</i> list, which is a claim about the types themselves rather than "
+        "about one batch's printing."))
+    s.append(p(
+        "Position is a plain grid reference rather than two separate row and column fields, "
+        "so it fits whatever scheme a box already uses - B-12, 3/4, or a shelf name. Lot "
+        "listings sort by it, with un-positioned lots last, so a partly-positioned box still "
+        "reads top to bottom."))
+    s.append(p(
+        "On the command line, a listing leaves out any of these columns that's empty for "
+        "every row it's showing, so <font face=\"Courier\">valves.py box 12</font> looks "
+        "exactly as it always did until there's something in there to show. In the window "
+        "they're always-present columns on the results table, since the table scrolls "
+        "sideways and a stable column layout is easier to work against."))
 
     s.append(h1("The Bases / Sockets tab"))
     s.append(p(
@@ -607,12 +654,15 @@ def technical_manual():
 
     s.append(h1("2. Database schema"))
     s.append(p(
-        "Six tables plus one convenience view, declared in "
+        "Six tables plus one convenience view. The tables are declared in "
         "<font face=\"Courier\">valvelib.SCHEMA</font> and created with "
-        "<font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font> - so adding a table to the "
-        "schema and re-running <font face=\"Courier\">V.init_db()</font> (which both front "
-        "ends do on every startup) is enough to migrate an existing database with no separate "
-        "migration step."))
+        "<font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font>; the view is declared "
+        "separately in <font face=\"Courier\">V_STOCK_SQL</font> and rebuilt by "
+        "<font face=\"Courier\">migrate()</font>. Both front ends call "
+        "<font face=\"Courier\">V.init_db()</font> on every startup, which runs SCHEMA and "
+        "then migrate(), so an existing database is brought up to the current schema in "
+        "place with no separate migration step to run by hand - see \u201cMigrations\u201d "
+        "below."))
     s.append(h2("valve_type - one row per type, the reference library"))
     s.append(p(
         "Primary key <font face=\"Courier\">type_key</font> (normalised: uppercase, "
@@ -623,10 +673,25 @@ def technical_manual():
         "notes."))
     s.append(h2("stock - one row per physical lot"))
     s.append(p(
-        "type_key (FK to valve_type, ON UPDATE CASCADE), box, qty, manufacturer, condition, "
-        "date_added, notes. The box identifier is free text, not an enforced foreign-key "
-        "relationship - the separate box table below just carries optional per-box "
-        "location/label notes keyed on that same identifier."))
+        "type_key (FK to valve_type, ON UPDATE CASCADE), box, position, qty, manufacturer, "
+        "condition, type1, type2, origin, test_values, other, date_added, notes. The box "
+        "identifier is free text, not an enforced foreign-key relationship - the separate "
+        "box table below just carries optional per-box location/label notes keyed on that "
+        "same identifier."))
+    s.append(p(
+        "position, type1, type2, origin, test_values and other were added in v1.4 and are "
+        "nullable throughout: nothing reads them except to display, search and export them, "
+        "so a database that never fills one in behaves exactly as it did before they "
+        "existed. position is a single free-text grid reference (\u201cB-12\u201d) rather "
+        "than separate row and column columns, so it fits whatever scheme a box already "
+        "uses; lot listings order by <font face=\"Courier\">position IS NULL, position</font> "
+        "so un-positioned lots sort last instead of first."))
+    s.append(note(
+        "type1/type2 belong to the lot, not the type: they record what this particular glass "
+        "is marked with, which is not necessarily the designation it's filed under. That is a "
+        "different claim from <font face=\"Courier\">valve_type.equivalents</font>, which "
+        "asserts something about the types themselves - so the two are deliberately not "
+        "merged, and nothing writes one from the other."))
     s.append(h2("socket - one row per lot of bases/sockets"))
     s.append(p(
         "base, box, qty, condition, notes. Split out from sundry deliberately, so a base type "
@@ -652,8 +717,34 @@ def technical_manual():
     s.append(h2("v_stock (view)"))
     s.append(p(
         "stock LEFT JOIN valve_type, exposing the commonly-needed combined columns (type "
-        "name, function, heater_v, pa_max, freq_max, base, datasheet_path) without repeating "
-        "the join in every query."))
+        "name, position, type1/type2, origin, test_values, other, function, heater_v, "
+        "pa_max, freq_max, base, datasheet_path) without repeating the join in every "
+        "query."))
+    s.append(p(
+        "It's the one object that can't be declared with an IF NOT EXISTS and left alone: it "
+        "names stock's columns explicitly, so it goes stale the moment stock gains one, and "
+        "<font face=\"Courier\">CREATE VIEW IF NOT EXISTS</font> would leave an older "
+        "database on an older definition for ever. Hence it lives in V_STOCK_SQL rather than "
+        "SCHEMA, and migrate() drops and recreates it every time."))
+
+    s.append(h2("Migrations"))
+    s.append(p(
+        "<font face=\"Courier\">migrate(con)</font> handles the one kind of schema change "
+        "CREATE TABLE IF NOT EXISTS can't: a column added to a table that already exists. "
+        "<font face=\"Courier\">ADDED_COLUMNS</font> maps a table name to the "
+        "(column, declaration) pairs added after its first release; migrate() compares that "
+        "against <font face=\"Courier\">PRAGMA table_info</font> and issues an "
+        "<font face=\"Courier\">ALTER TABLE ... ADD COLUMN</font> for whatever's missing, "
+        "then rebuilds v_stock. It returns the list of columns it actually added, so an "
+        "empty list means the database was already current."))
+    s.append(p(
+        "Both steps are idempotent and safe to run on a current database, which is why "
+        "init_db() can call it unconditionally on every startup. SQLite's ADD COLUMN only "
+        "appends a nullable column to the table definition - existing rows are not rewritten "
+        "and read back NULL for the new column - so the operation is cheap regardless of how "
+        "many rows the table holds, and there is no window in which existing data is at "
+        "risk. To add a column in a future version, append it to both SCHEMA (for fresh "
+        "databases) and ADDED_COLUMNS (for existing ones)."))
     s.append(note(
         "The type_key -> stock.type_key foreign key is declared "
         "<font face=\"Courier\">ON UPDATE CASCADE</font>. That matters in practice: renaming "
@@ -785,12 +876,19 @@ def technical_manual():
         ["find TYPE", "Which boxes hold a type (follows equivalents)."],
         ["show TYPE", "Full reference record for a type."],
         ["search --function .. --heater .. --pa ..", "Parametric search; numeric flags take "
-         "a bare value or a >, <, >=, <= comparison."],
-        ["add TYPE --box N [--qty --maker --condition --notes]", "Add stock; creates the "
-         "type automatically if new."],
-        ["import-csv FILE", "Bulk-add stock from a CSV (see upload_template.csv)."],
+         "a bare value or a >, <, >=, <= comparison. --position, --origin and --alt "
+         "(Type 1 / Type 2) filter on the lot's own fields; --text covers those too."],
+        ["add TYPE --box N [--qty --maker --condition --notes --position --type1 --type2 "
+         "--origin --test --other]", "Add stock; creates the type automatically if new, and "
+         "reports the lot id it created."],
+        ["edit LOT_ID [same options as add]", "Change one lot in place; only the options "
+         "given are written, and '' clears a field. Lot ids come from the ID column of "
+         "box/find/show."],
+        ["import-csv FILE", "Bulk-add stock from a CSV (see upload_template.csv). Only type "
+         "and box are required; any other column may be blank or absent."],
         ["take TYPE [--qty --box]", "Remove stock you've used."],
-        ["move TYPE --frm A --to B", "Move a type between boxes."],
+        ["move TYPE --frm A --to B [--position]", "Move a type between boxes; the position "
+         "is replaced or cleared, since it belonged to the old box."],
         ["bases [--base --box]", "List valve base/socket stock."],
         ["sock-add / sock-take / sock-move", "Same idea as add/take/move, for bases/sockets."],
         ["docs [--type TYPE]", "List reference documents - the general library by default, or "
@@ -836,13 +934,17 @@ def technical_manual():
 
     s.append(h1("9. Extending the tool"))
     s.append(bullets([
-        "<b>New reference field</b> - add the column to SCHEMA in valvelib.py, then to "
-        "TYPE_FIELDS in valves_gui.py (drives the detail-panel form) and ALL_FIELDS in "
-        "import_researched.py if research prompts should be able to fill it. No migration "
-        "step needed - CREATE TABLE IF NOT EXISTS plus ALTER TABLE-free additive columns "
-        "would need a small ALTER TABLE ADD COLUMN in init_db() if adding to an *existing* "
-        "table; the tables here were designed with the fields we currently use, so extending "
-        "one is the one schema change that isn't fully automatic.",
+        "<b>New reference field</b> - add the column to SCHEMA <i>and</i> to ADDED_COLUMNS "
+        "in valvelib.py (SCHEMA builds fresh databases, ADDED_COLUMNS brings existing ones "
+        "up to it - see \u201cMigrations\u201d above), then to TYPE_FIELDS in valves_gui.py "
+        "(drives the detail-panel form) and ALL_FIELDS in import_researched.py if research "
+        "prompts should be able to fill it. Nothing else is needed: migrate() runs on every "
+        "startup and applies the ALTER TABLE itself.",
+        "<b>New per-lot field</b> - as above for the schema, then LOT_FIELDS in valves.py "
+        "(the add/edit options and the CSV importer) and LOT_FIELDS in valves_gui.py (the "
+        "Add stock and Edit lot forms). Add it to STOCK_SELECT/STOCK_COLS in valves_gui.py "
+        "to show it as a results column, to STOCK_COLS in snapshot.py so it's committed, "
+        "and to cmd_export in valves.py so it reaches the spreadsheet.",
         "<b>New CLI command</b> - one cmd_*(con, a) function in valves.py plus an "
         "add_parser() block; follow an existing command for the pattern.",
         "<b>New GUI tab</b> - add a _build_x_tab(root) method, call it from App.__init__ "
@@ -862,7 +964,7 @@ def upgrade_guide():
     s = []
     s += title("Valve Inventory", "Upgrade Guide")
     s.append(p(
-        "How to move from an older installed version to a newer one - say, v1.2 to v1.3 - "
+        "How to move from an older installed version to a newer one - say, v1.3 to v1.4 - "
         "without losing anything you've added. This is a living document: the general "
         "procedure below applies to every release so far and is expected to keep applying, "
         "but check “Version-specific notes” at the end for anything a particular "
@@ -877,11 +979,14 @@ def upgrade_guide():
         "existing database. That's the whole procedure."))
     s.append(note(
         "This works because every schema change so far has been strictly additive - new "
-        "tables only, created with <font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font>, "
-        "never a renamed or removed column. The app rebuilds its schema against your existing "
-        "database on every single startup (<font face=\"Courier\">V.init_db()</font>) - on an "
-        "up-to-date database that's a no-op; on one from an older version, it just adds "
-        "whatever tables are new, in place, and leaves everything already there untouched."))
+        "tables and new columns only, never a renamed or removed one. The app brings its "
+        "schema up to date against your existing database on every single startup "
+        "(<font face=\"Courier\">V.init_db()</font>): it creates whatever tables are new "
+        "(<font face=\"Courier\">CREATE TABLE IF NOT EXISTS</font>) and adds whatever "
+        "columns are new (<font face=\"Courier\">ALTER TABLE ... ADD COLUMN</font>, from "
+        "v1.4 on). On an up-to-date database that's a no-op; on an older one it happens in "
+        "place, leaving every value already there untouched - SQLite's ADD COLUMN appends a "
+        "nullable column to the table definition without rewriting any existing row."))
 
     s.append(h1("1. Back up first - always"))
     s.append(p("Do this before touching anything else. Two options, and it's fine to do both:"))
@@ -902,7 +1007,7 @@ def upgrade_guide():
     s.append(h2("If you're on a git clone"))
     s.append(code(
         "git fetch --tags\n"
-        "git checkout v1.3          # or: git pull, to track main instead of a tag"))
+        "git checkout v1.4          # or: git pull, to track main instead of a tag"))
     s.append(p(
         "<font face=\"Courier\">valves.db</font> is gitignored, so neither command touches "
         "it - only the code and docs update. Nothing further to do for the database itself."))
@@ -945,9 +1050,29 @@ def upgrade_guide():
     s.append(h1("Version-specific notes"))
     s.append(p(
         "Nothing beyond the standard procedure above has ever been required. Entries below "
-        "are added only if a future release ever needs something different - if there's "
-        "nothing here for the version you're moving to, the standard procedure is all you "
-        "need."))
+        "record what each release actually changed about the database, and are worth a read "
+        "before upgrading - but if there's nothing here for the version you're moving to, "
+        "the standard procedure is all you need."))
+    s.append(h2("v1.4"))
+    s.append(p(
+        "Adds six optional columns to the <font face=\"Courier\">stock</font> table - "
+        "position, type1, type2, origin, test_values and other - so a lot can record where "
+        "in its box it sits, what else the valve is marked as, where it came from, and how "
+        "it tested. This is the first release to add columns to an existing table rather "
+        "than whole new tables, so it is the first to run an "
+        "<font face=\"Courier\">ALTER TABLE</font> against your database. It still needs no "
+        "manual steps: first launch adds the columns in place and leaves every existing "
+        "value untouched, and the new columns start out empty on every lot you already "
+        "have. Fill them in as and when it's worth it - blank is a perfectly normal value, "
+        "and nothing else in the tool changes behaviour because of them."))
+    s.append(note(
+        "Two things worth knowing if you script against the database yourself. The "
+        "<font face=\"Courier\">v_stock</font> view is dropped and recreated on that first "
+        "launch, so any view of your own built <i>on top of</i> v_stock should be checked "
+        "afterwards. And <font face=\"Courier\">data/stock.csv</font> gains six columns, so "
+        "the first <font face=\"Courier\">snapshot.py</font> run after upgrading will show "
+        "a large diff for that file even if you've changed nothing - that's the header and "
+        "the new empty fields, not lost data."))
     s.append(h2("v1.3"))
     s.append(p(
         "Adds one new table (<font face=\"Courier\">document</font> - extra datasheets, "

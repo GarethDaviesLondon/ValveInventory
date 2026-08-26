@@ -93,11 +93,15 @@ quick lookups and scripting. Five tabs:
 - **Boxes down the left** — click a heading to sort, click a box to filter,
   "All boxes" to clear.
 - **Search row** — text, function, base, and the numeric fields, taking the
-  same `>20` / `<7` / `>=250` comparisons as the CLI. Searching a type by name
+  same `>20` / `<7` / `>=250` comparisons as the CLI. Text searches the lot's
+  own fields as well as the reference record, so "the one out of the Bush" or
+  a number printed only on the glass finds it without your having to remember
+  which field you wrote it in. Searching a type by name
   also pulls in stock of anything cross-referenced as its equivalent (shown
   in blue, labelled which type it's equivalent to) — search `ECF80` and you'll
   see `PCF80` stock too. **Advanced...** opens every field — maker, condition,
-  family, confidence, has-datasheet, and the rest of the numeric ratings.
+  family, confidence, has-datasheet, position, origin, Type 1 / Type 2, and
+  the rest of the numeric ratings.
 - **Results table** — click a heading to sort, double-click a row to open its
   datasheet. **Amber rows are unconfirmed (inferred); blue rows are
   equivalents pulled in by a search.**
@@ -120,8 +124,13 @@ quick lookups and scripting. Five tabs:
   *Edit parameters...* button opens the same field-entry form as the detail
   panel, so a Browse-tab research session never needs to switch tabs to
   record what a datasheet says.
-- **Add stock / Take / Move / Delete lot** act on the selected row. *Add stock*
-  creates the type automatically if it's new, classifying it as it goes.
+- **Add stock / Edit lot / Take / Move / Delete lot** act on the selected row.
+  *Add stock* creates the type automatically if it's new, classifying it as it
+  goes. *Edit lot* changes everything recorded against that one physical lot —
+  where it sits, what it's marked as, where it came from, how it tested (see
+  [What a lot records](#what-a-lot-records)). The two editors do different
+  jobs: *Edit lot* is this batch of valves, the panel on the right is the
+  reference record shared by every lot of that type.
 
 ### Bases / Sockets
 
@@ -196,10 +205,38 @@ Two tables, as discussed:
 
 - **`valve_type`** — one row per type. Function, base, heater V/A, Va, Pa, gm, μ,
   power out, frequency, equivalents, and the path to its datasheet in the local archive.
-- **`stock`** — one row per lot. Type, box, quantity, manufacturer, condition, notes.
+- **`stock`** — one row per lot. Type, box, position, quantity, manufacturer,
+  condition, Type 1 / Type 2, origin, test values, other, notes.
 
 Plus `sundry` for the sockets, screening cans and crystals, and `box` for
 per-box location notes.
+
+### What a lot records
+
+A lot is one physical batch: this many of this type, in this box. Two Mullard
+EL84s out of different sets are one *type* but two *lots*, and it's the lot
+that knows which shelf it's on and which set it came out of. Beyond quantity,
+manufacturer and condition, each lot carries:
+
+| Field | What goes in it |
+|---|---|
+| `position` | Where in the box it sits, as a grid reference — `B-12`, row and column. |
+| `type1` / `type2` | Other designations the valve is marked with: a US number, a service code, a second maker's part number. Searchable, so it doesn't matter which one you look it up by. |
+| `origin` | Where it came from — bought, inherited, or the set it came out of. |
+| `test_values` | What it measured on a tester. |
+| `other` | Anything else: boxed or unboxed, odd printing, whatever the row needs. |
+
+**Every one of them is optional**, and blank is a perfectly normal value — the
+tool behaves exactly as it did before they existed for anyone who doesn't
+want them. Fill them in from *Add stock*, from *Edit lot* afterwards, from the
+upload CSV, or from `valves.py add` / `valves.py edit`. On the command line a
+listing leaves out any of these columns that's empty for every row it shows,
+so `valves.py box 12` looks exactly as it always did until there's something
+in there to show.
+
+Upgrading an existing database needs no migration step of your own: opening
+it with this version adds the columns in place, leaving every value already
+there untouched. See `docs/UPGRADE_GUIDE.pdf`.
 
 ## Version control
 
@@ -210,6 +247,10 @@ committed instead. Refresh it before you commit:
 python3 snapshot.py          # writes data/types.csv, stock.csv, sundry.csv, valves.sql
 git add -A && git commit -m "restocked box 12"
 ```
+
+`snapshot.py` opens the database through the same schema check the app uses,
+so an older one is brought up to date before it's written out — the snapshot
+always matches the schema the code expects.
 
 After cloning on another machine:
 
@@ -270,6 +311,11 @@ python3 valves.py search --pa '>20'                 # anode dissipation over 20W
 python3 valves.py search --function triode --freq '>100'
 python3 valves.py search --text nuvistor
 python3 valves.py search --maker Mullard --box 5
+
+# the per-lot fields
+python3 valves.py search --position B-           # everything on row B
+python3 valves.py search --origin 'Bush'         # what came out of the Bush
+python3 valves.py search --alt 6BQ5              # marked 6BQ5, filed under EL84
 ```
 
 Comparison operators work on `--heater --pa --va --freq --gm --mu`:
@@ -279,16 +325,24 @@ shell doesn't read `>` as a redirect.
 ## Keeping it current
 
 ```bash
-python3 valves.py add EL84 --box 25 --qty 6 --maker Mullard --condition NOS
+python3 valves.py add EL84 --box 25 --qty 6 --maker Mullard --condition NOS \
+                           --position B-12 --type1 6BQ5 --origin 'ex Bush DAC90'
 python3 valves.py take EL84 --qty 2                  # used two in a build
-python3 valves.py move GZ34 --frm 8 --to 12
+python3 valves.py move GZ34 --frm 8 --to 12 --position A-01
+python3 valves.py edit 417 --position C-04 --test 'gm 9.8 mA/V'
 python3 valves.py export                             # refresh the xlsx
 ```
 
 `add` creates the type automatically if it's new, classifying it from its
-designation as it goes. For a whole batch at once, use `import-csv` (or
+designation as it goes, and reports the lot id it created. `edit` takes that
+id — also the `ID` column of `box`, `find` and `show` — and changes one lot in
+place: only the options you pass are written, and `--origin ''` clears a field
+you filled in by mistake. For a whole batch at once, use `import-csv` (or
 Tools > Import upload CSV in the GUI) with a file shaped like
-`upload_template.csv` — same auto-classification, one row per lot. Tools >
+`upload_template.csv` — same auto-classification, one row per lot. Only
+`type` and `box` are required there; any other column can be left blank or
+left out of the file altogether, so a CSV written for an older version still
+imports unchanged. Tools >
 Create upload template writes a blank copy of that CSV ready to fill in; if
 your existing records aren't already in that shape, Tools > Generate
 CSV-building prompt writes a prompt for any Claude chat that interviews you

@@ -27,7 +27,8 @@ TYPE_COLS = ["type_key", "name", "function", "family", "base", "pins",
              "heater_v", "heater_a", "va_max", "pa_max", "gm", "mu",
              "power_out", "freq_max", "typical_use", "equivalents",
              "datasheet_path", "datasheet_url", "confidence", "notes"]
-STOCK_COLS = ["id", "type_key", "box", "qty", "manufacturer", "condition",
+STOCK_COLS = ["id", "type_key", "box", "position", "qty", "manufacturer",
+              "condition", "type1", "type2", "origin", "test_values", "other",
               "date_added", "notes"]
 SOCKET_COLS = ["id", "base", "box", "qty", "condition", "notes"]
 DOCUMENT_COLS = ["id", "type_key", "title", "abstract", "path", "url", "added"]
@@ -55,11 +56,16 @@ def snapshot(args):
     """Export the database at args.db to data/*.csv plus a full data/valves.sql dump.
 
     Writes one CSV per table (types, stock, sundry, sockets, documents) and a SQL dump
-    that `restore()` can replay to recreate the database from scratch. When
+    that `restore()` can replay to recreate the database from scratch. The
+    database is migrated to the current schema first (V.init_db), so an older
+    one snapshots as its upgraded self rather than failing on a missing column. When
     args.strip_notes is set, the typical_use and notes columns are blanked
     in the CSV exports (the SQL dump always has the full data).
     """
-    con = V.connect(args.db)
+    # init_db rather than connect: a database written by an older version is
+    # brought up to the current schema first, so the snapshot always has every
+    # column the CSV headers name.
+    con = V.init_db(args.db)
     os.makedirs(DATA, exist_ok=True)
     strip = ("typical_use", "notes") if args.strip_notes else ()
 

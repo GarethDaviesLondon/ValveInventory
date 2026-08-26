@@ -3,9 +3,9 @@
 valves.py - valve stock inventory.
 
 Command-line front end for the inventory: an argparse-based CLI with one
-cmd_*(con, a) function per subcommand (box, find, show, search, add, take,
-move, bases, sock-add, sock-take, sock-move, set, merge, dupes, scan, sheet,
-gaps, stats, export, import-csv). Each cmd_* function takes an open sqlite3
+cmd_*(con, a) function per subcommand (box, find, show, search, add, edit,
+take, move, bases, sock-add, sock-take, sock-move, set, merge, dupes, scan,
+sheet, gaps, stats, export, import-csv). Each cmd_* function takes an open sqlite3
 connection (`con`, row_factory=sqlite3.Row - see valvelib.init_db) and the
 parsed argparse Namespace (`a`), and is responsible for its own commit().
 
@@ -17,7 +17,8 @@ belongs in valvelib.
   valves.py box 12                  what is in box 12
   valves.py find KT66               which boxes hold KT66 (follows equivalents)
   valves.py search --function pentode --heater 6.3 --pa '>20'
-  valves.py add EL34 --box 1 --qty 4 --maker Svetlana
+  valves.py add EL34 --box 1 --qty 4 --maker Svetlana --position B-12
+  valves.py edit 417 --origin 'ex Bush DAC90' --test 'gm 9.8 mA/V'
   valves.py take EL34 --box 1 --qty 2
   valves.py show ECC83              full reference record
   valves.py set ECC83 --pa 1.2 --mu 100 --base B9A --confirm
@@ -36,6 +37,20 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import valvelib as V
+
+
+# Per-lot detail fields (stock columns beyond box/qty/maker/condition/notes),
+# as (column, CLI option, human label). One list so the add/edit options, the
+# CSV importer, and the spreadsheet export stay in step with each other and
+# with the schema.
+LOT_FIELDS = [
+    ("position", "position", "Position"),
+    ("type1", "type1", "Type 1"),
+    ("type2", "type2", "Type 2"),
+    ("origin", "origin", "Origin"),
+    ("test_values", "test", "Test values"),
+    ("other", "other", "Other"),
+]
 
 
 # ---------------------------------------------------------------- helpers
@@ -89,6 +104,18 @@ def table(rows, cols):
         print("  " + "  ".join(cells))
 
 
+def shown(rows, cols, always):
+    """Drop columns from `cols` that are empty in every row of `rows`.
+
+    The per-lot detail fields are optional and often unused, so listing them
+    unconditionally would pad every table with blank columns for anyone who
+    doesn't fill them in. Columns named in `always` are kept regardless, so
+    the shape of a listing doesn't jump around as stock comes and goes.
+    """
+    return [c for c in cols
+            if c in always or any(r.get(c) not in (None, "") for r in rows)]
+
+
 def parse_cmp(expr):
     """'>20' -> ('>', 20.0);  '6.3' -> ('=', 6.3)"""
     m = re.match(r"^\s*(>=|<=|>|<|=)?\s*([\d.]+)\s*$", str(expr))
@@ -100,13 +127,21 @@ def parse_cmp(expr):
 # ---------------------------------------------------------------- commands
 
 def cmd_box(con, a):
-    """Print everything stored in one box: valve lots, sundry items, and bases/sockets."""
+    """Print everything stored in one box: valve lots, sundry items, and bases/sockets.
+
+    Lots are listed by position within the box (blank positions last, so a
+    partly-positioned box still reads top to bottom) and carry their lot id,
+    which is what 'edit' takes to change one.
+    """
     rows = [dict(r) for r in con.execute(
-        "SELECT type, qty, manufacturer, condition, function, notes "
-        "FROM v_stock WHERE box=? COLLATE NOCASE ORDER BY type", (a.box,))]
+        "SELECT id, position, type, type1, type2, qty, manufacturer, condition, "
+        "origin, function, notes FROM v_stock WHERE box=? COLLATE NOCASE "
+        "ORDER BY position IS NULL, position, type", (a.box,))]
     total = sum(r["qty"] for r in rows)
     print(f"\nBox {a.box} - {len(rows)} lots, {total} valves\n")
-    table(rows, ["type", "qty", "manufacturer", "condition", "function"])
+    table(rows, shown(rows, ["id", "position", "type", "type1", "type2", "qty",
+                             "manufacturer", "condition", "origin", "function"],
+                      always={"id", "type", "qty", "manufacturer", "condition", "function"}))
     sund = [dict(r) for r in con.execute(
         "SELECT description, qty FROM sundry WHERE box=? COLLATE NOCASE", (a.box,))]
     if sund:
@@ -129,8 +164,8 @@ def cmd_find(con, a):
     for k in keys:
         t = con.execute("SELECT * FROM valve_type WHERE type_key=?", (k,)).fetchone()
         rows = [dict(r) for r in con.execute(
-            "SELECT box, qty, manufacturer, condition, notes FROM v_stock "
-            "WHERE type_key=? ORDER BY CAST(box AS INTEGER), box", (k,))]
+            "SELECT id, box, position, qty, manufacturer, condition, origin, notes "
+            "FROM v_stock WHERE type_key=? ORDER BY CAST(box AS INTEGER), box, position", (k,))]
         total = sum(r["qty"] for r in rows)
         print(f"\n{t['name']}  -  {total} in stock across {len(rows)} box(es)")
         if t["function"]:
@@ -140,7 +175,9 @@ def cmd_find(con, a):
         if t["equivalents"]:
             print(f"  equivalents: {t['equivalents']}")
         print()
-        table(rows, ["box", "qty", "manufacturer", "condition"])
+        table(rows, shown(rows, ["id", "box", "position", "qty", "manufacturer",
+                                 "condition", "origin"],
+                          always={"id", "box", "qty", "manufacturer", "condition"}))
     print()
 
 
@@ -173,9 +210,12 @@ def cmd_show(con, a):
     if t["notes"]:
         print(f"\n  notes: {t['notes'][:1500]}")
     rows = [dict(r) for r in con.execute(
-        "SELECT box, qty, manufacturer, condition FROM v_stock WHERE type_key=?", (keys[0],))]
+        "SELECT id, box, position, qty, manufacturer, condition, origin "
+        "FROM v_stock WHERE type_key=?", (keys[0],))]
     print(f"\n  stock ({sum(r['qty'] for r in rows)}):")
-    table(rows, ["box", "qty", "manufacturer", "condition"])
+    table(rows, shown(rows, ["id", "box", "position", "qty", "manufacturer",
+                             "condition", "origin"],
+                      always={"id", "box", "qty", "manufacturer", "condition"}))
     print()
 
 
@@ -198,6 +238,16 @@ def cmd_search(con, a):
     if a.box:
         where.append("s.box = ? COLLATE NOCASE")
         args.append(a.box)
+    if a.position:
+        where.append("LOWER(s.position) LIKE ?")
+        args.append(f"%{a.position.lower()}%")
+    if a.origin:
+        where.append("LOWER(s.origin) LIKE ?")
+        args.append(f"%{a.origin.lower()}%")
+    if a.alt:
+        # the designation as marked on the valve, either secondary column
+        where.append("(LOWER(s.type1) LIKE ? OR LOWER(s.type2) LIKE ?)")
+        args += [f"%{a.alt.lower()}%"] * 2
     for field, expr in (("t.heater_v", a.heater), ("t.pa_max", a.pa),
                         ("t.va_max", a.va), ("t.freq_max", a.freq),
                         ("t.gm", a.gm), ("t.mu", a.mu)):
@@ -206,18 +256,27 @@ def cmd_search(con, a):
             where.append(f"{field} {op} ?")
             args.append(val)
     if a.text:
+        # reference text plus everything recorded against the lot itself, so
+        # "the one out of the Bush" or a number only printed on the glass is
+        # findable without knowing which field it was written into
         where.append("(LOWER(t.name) LIKE ? OR LOWER(t.typical_use) LIKE ? "
-                     "OR LOWER(t.notes) LIKE ? OR LOWER(t.equivalents) LIKE ?)")
-        args += [f"%{a.text.lower()}%"] * 4
+                     "OR LOWER(t.notes) LIKE ? OR LOWER(t.equivalents) LIKE ? "
+                     "OR LOWER(s.notes) LIKE ? OR LOWER(s.type1) LIKE ? "
+                     "OR LOWER(s.type2) LIKE ? OR LOWER(s.origin) LIKE ? "
+                     "OR LOWER(s.test_values) LIKE ? OR LOWER(s.other) LIKE ?)")
+        args += [f"%{a.text.lower()}%"] * 10
 
-    sql = f"""SELECT t.name AS type, s.box, s.qty, s.manufacturer,
-                     t.function, t.heater_v, t.pa_max
+    sql = f"""SELECT t.name AS type, s.box, s.position, s.qty, s.manufacturer,
+                     s.condition, s.origin, t.function, t.heater_v, t.pa_max
               FROM stock s JOIN valve_type t ON s.type_key=t.type_key
               WHERE {' AND '.join(where)}
               ORDER BY t.name, CAST(s.box AS INTEGER)"""
     rows = [dict(r) for r in con.execute(sql, args)]
     print(f"\n{len(rows)} lots, {sum(r['qty'] for r in rows)} valves\n")
-    table(rows, ["type", "box", "qty", "manufacturer", "function", "heater_v", "pa_max"])
+    table(rows, shown(rows, ["type", "box", "position", "qty", "manufacturer",
+                             "condition", "origin", "function", "heater_v", "pa_max"],
+                      always={"type", "box", "qty", "manufacturer", "function",
+                              "heater_v", "pa_max"}))
     print()
 
 
@@ -228,7 +287,9 @@ def cmd_add(con, a):
     come from the heuristic classifier rather than a datasheet; use 'set
     --confirm' later once real parameters are known. The box row is
     upserted (INSERT OR IGNORE) so an unfamiliar box still shows up in
-    box listings even before it has a real location note.
+    box listings even before it has a real location note. The per-lot detail
+    fields (LOT_FIELDS - position, type1/type2, origin, test values, other)
+    are all optional and can equally be filled in afterwards with 'edit'.
     """
     key = V.norm(a.type)
     exists = con.execute("SELECT 1 FROM valve_type WHERE type_key=?", (key,)).fetchone()
@@ -240,17 +301,72 @@ def cmd_add(con, a):
                      inf.get("heater_v"), inf.get("heater_a")))
         print(f"new type created: {a.type}"
               + (f"  ({inf.get('function')})" if inf.get("function") else ""))
-    con.execute("""INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes)
-                   VALUES (?,?,?,?,?,?,?)""",
-                (key, a.box, a.qty, a.maker, a.condition,
-                 datetime.date.today().isoformat(), a.notes))
+    cur = con.execute(
+        """INSERT INTO stock (type_key,box,position,qty,manufacturer,condition,
+                              type1,type2,origin,test_values,other,date_added,notes)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (key, a.box, a.position, a.qty, a.maker, a.condition,
+         a.type1, a.type2, a.origin, a.test, a.other,
+         datetime.date.today().isoformat(), a.notes))
     con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.box, "attic"))
     con.commit()
-    print(f"added {a.qty} x {a.type} to box {a.box}")
+    print(f"added {a.qty} x {a.type} to box {a.box}"
+          + (f", position {a.position}" if a.position else "")
+          + f"  (lot {cur.lastrowid} - use 'edit {cur.lastrowid}' to change it)")
+
+
+def cmd_edit(con, a):
+    """Update one stock lot in place, by lot id - the counterpart to 'set' for the reference table.
+
+    Lot ids are printed by 'box', 'find' and 'show', and by 'add' when it
+    creates one. Only the options actually given are written, so editing the
+    position leaves the origin alone; pass an empty string ('--origin ""')
+    to clear a field that was filled in by mistake.
+    """
+    row = con.execute("SELECT * FROM v_stock WHERE id=?", (a.id,)).fetchone()
+    if not row:
+        print(f"no lot with id {a.id} - lot ids are shown by 'box', 'find' and 'show'")
+        return
+    fields, args = [], []
+    for col, opt, _label in LOT_FIELDS:
+        val = getattr(a, opt, None)
+        if val is not None:
+            fields.append(f"{col}=?")
+            args.append(val or None)      # "" clears the field
+    for col, val in (("box", a.box), ("qty", a.qty), ("manufacturer", a.maker),
+                     ("condition", a.condition), ("notes", a.notes)):
+        if val is not None:
+            fields.append(f"{col}=?")
+            args.append(val if col == "qty" else (val or None))
+    if not fields:
+        print("nothing to change - pass at least one option (--help lists them)")
+        return
+    args.append(a.id)
+    con.execute(f"UPDATE stock SET {','.join(fields)} WHERE id=?", args)
+    if a.box:
+        con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.box, "attic"))
+    con.commit()
+    r = con.execute("SELECT * FROM v_stock WHERE id=?", (a.id,)).fetchone()
+    print(f"\nlot {a.id}: {r['qty']} x {r['type']} in box {r['box']}"
+          + (f", position {r['position']}" if r["position"] else ""))
+    for col, _opt, label in LOT_FIELDS:
+        if col != "position" and r[col]:
+            print(f"  {label:<12} {r[col]}")
+    for col, label in (("manufacturer", "Maker"), ("condition", "Condition"),
+                       ("notes", "Notes")):
+        if r[col]:
+            print(f"  {label:<12} {r[col]}")
+    print()
 
 
 def cmd_import_csv(con, a):
-    """Bulk-add stock from a CSV (see upload_template.csv for the columns)."""
+    """Bulk-add stock from a CSV (see upload_template.csv for the columns).
+
+    Only `type` and `box` are required. Every other column, including the
+    per-lot detail fields (LOT_FIELDS), is optional and may be left out of
+    the file altogether - a CSV written for an older version still imports
+    unchanged.
+    """
     import csv
     added_types = added_lots = 0
     errors = []
@@ -270,6 +386,10 @@ def cmd_import_csv(con, a):
             maker = (row.get("maker") or "").strip() or None
             condition = (row.get("condition") or "").strip() or None
             notes = (row.get("notes") or "").strip() or None
+            # "test" in the CSV matches the --test option name; the column it
+            # lands in is test_values
+            extra = [(row.get("test" if col == "test_values" else col) or "").strip() or None
+                     for col, _opt, _label in LOT_FIELDS]
             if not con.execute("SELECT 1 FROM valve_type WHERE type_key=?", (key,)).fetchone():
                 inf = V.classify(t)
                 con.execute(
@@ -279,9 +399,11 @@ def cmd_import_csv(con, a):
                      inf.get("heater_v"), inf.get("heater_a")))
                 added_types += 1
             con.execute(
-                """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes)
-                   VALUES (?,?,?,?,?,?,?)""",
-                (key, box, qty, maker, condition, datetime.date.today().isoformat(), notes))
+                """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes,
+                                      position,type1,type2,origin,test_values,other)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                [key, box, qty, maker, condition, datetime.date.today().isoformat(), notes]
+                + extra)
             con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (box, "attic"))
             added_lots += 1
     con.commit()
@@ -330,13 +452,23 @@ def cmd_move(con, a):
     """Reassign all stock lots of a type in one box (--frm) to another box (--to).
 
     Uses only resolve()'s first match; if that type has several lots in the
-    source box (e.g. different manufacturers) they are all moved together.
+    source box (e.g. different manufacturers) they are all moved together -
+    as is --position, if given, so use 'edit' to place one lot on its own.
     """
     keys = resolve(con, a.type)
-    con.execute("UPDATE stock SET box=? WHERE type_key=? AND box=? COLLATE NOCASE",
-                (a.to, keys[0], a.frm))
+    if a.position is None:
+        con.execute("UPDATE stock SET box=? WHERE type_key=? AND box=? COLLATE NOCASE",
+                    (a.to, keys[0], a.frm))
+    else:
+        # a position is only meaningful within its own box, so moving to a new
+        # box either takes a new one or clears the old one rather than
+        # carrying a stale reference across
+        con.execute("UPDATE stock SET box=?, position=? WHERE type_key=? AND box=? COLLATE NOCASE",
+                    (a.to, a.position or None, keys[0], a.frm))
+    con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)", (a.to, "attic"))
     con.commit()
-    print(f"moved {keys[0]} from box {a.frm} to box {a.to}")
+    print(f"moved {keys[0]} from box {a.frm} to box {a.to}"
+          + (f", position {a.position}" if a.position else ""))
 
 
 # ---------------------------------------------------------------- bases/sockets
@@ -609,14 +741,18 @@ def cmd_export(con, a):
 
     ws = wb.active
     ws.title = "Stock"
-    cols = ["Box", "Type", "Qty", "Manufacturer", "Condition", "Function",
+    cols = ["Box", "Position", "Type", "Type 1", "Type 2", "Qty", "Manufacturer",
+            "Condition", "Origin", "Test values", "Other", "Function",
             "Heater V", "Pa max W", "Datasheet", "Notes"]
     ws.append(cols)
-    for r in con.execute("""SELECT s.box, COALESCE(t.name,s.type_key), s.qty,
-                                   s.manufacturer, s.condition, t.function,
+    for r in con.execute("""SELECT s.box, s.position, COALESCE(t.name,s.type_key),
+                                   s.type1, s.type2, s.qty,
+                                   s.manufacturer, s.condition, s.origin,
+                                   s.test_values, s.other, t.function,
                                    t.heater_v, t.pa_max, t.datasheet_path, s.notes
                             FROM stock s LEFT JOIN valve_type t ON s.type_key=t.type_key
-                            ORDER BY CAST(s.box AS INTEGER), s.box, t.name"""):
+                            ORDER BY CAST(s.box AS INTEGER), s.box,
+                                     s.position IS NULL, s.position, t.name"""):
         ws.append([(x[:300] if isinstance(x, str) else x) for x in r])
 
     ws2 = wb.create_sheet("Types")
@@ -655,6 +791,27 @@ def cmd_export(con, a):
 
 # ---------------------------------------------------------------- cli
 
+LOT_OPTION_HELP = {
+    "position": "where in the box, e.g. B-12 (row-column)",
+    "type1": "secondary designation as marked, e.g. a US number",
+    "type2": "a further secondary designation",
+    "origin": "purchase, previous owner, or the set it came out of",
+    "test": "what it measured on the tester",
+    "other": "anything else: boxed/unboxed, printing, ...",
+}
+
+
+def add_lot_options(parser):
+    """Declare the per-lot detail options (LOT_FIELDS) on `parser`.
+
+    Shared by 'add' and 'edit' so the two always accept exactly the same
+    set - the difference is only that 'add' writes them once and 'edit'
+    writes whichever are given.
+    """
+    for _col, opt, _label in LOT_FIELDS:
+        parser.add_argument("--" + opt, help=LOT_OPTION_HELP[opt])
+
+
 def main():
     """Entry point: set up console output, build the argparse subcommand tree, then open the DB and dispatch to the chosen cmd_*() handler.
 
@@ -689,6 +846,9 @@ def main():
 
     s = sub.add_parser("search", help="filter by parameters")
     s.add_argument("--function"); s.add_argument("--maker"); s.add_argument("--box")
+    s.add_argument("--position", help="position within the box, e.g. B-12")
+    s.add_argument("--origin", help="where it came from")
+    s.add_argument("--alt", help="a secondary designation (Type 1 / Type 2)")
     s.add_argument("--heater", help="e.g. 6.3 or '<7'")
     s.add_argument("--pa", help="anode dissipation, e.g. '>20'")
     s.add_argument("--va"); s.add_argument("--freq"); s.add_argument("--gm"); s.add_argument("--mu")
@@ -699,7 +859,15 @@ def main():
     s.add_argument("type"); s.add_argument("--box", required=True)
     s.add_argument("--qty", type=int, default=1); s.add_argument("--maker")
     s.add_argument("--condition"); s.add_argument("--notes")
+    add_lot_options(s)
     s.set_defaults(fn=cmd_add)
+
+    s = sub.add_parser("edit", help="change one stock lot (by lot id, as shown by box/find/show)")
+    s.add_argument("id", type=int, help="lot id, from the ID column of box/find/show")
+    s.add_argument("--box"); s.add_argument("--qty", type=int); s.add_argument("--maker")
+    s.add_argument("--condition"); s.add_argument("--notes")
+    add_lot_options(s)
+    s.set_defaults(fn=cmd_edit)
 
     s = sub.add_parser("import-csv", help="bulk-add stock from a CSV (see upload_template.csv)")
     s.add_argument("file"); s.set_defaults(fn=cmd_import_csv)
@@ -710,7 +878,9 @@ def main():
 
     s = sub.add_parser("move", help="move a type between boxes")
     s.add_argument("type"); s.add_argument("--frm", required=True)
-    s.add_argument("--to", required=True); s.set_defaults(fn=cmd_move)
+    s.add_argument("--to", required=True)
+    s.add_argument("--position", help="position in the new box; '' clears the old one")
+    s.set_defaults(fn=cmd_move)
 
     s = sub.add_parser("bases", help="list valve base/socket stock")
     s.add_argument("--base"); s.add_argument("--box"); s.set_defaults(fn=cmd_bases)

@@ -1,3 +1,3 @@
-type,box,qty,maker,condition,notes
-EL84,12,4,Mullard,NOS,
-ECC83,12,2,,used,
+type,box,position,qty,maker,condition,type1,type2,origin,test,other,notes
+EL84,12,B-12,4,Mullard,NOS,6BQ5,,ex Bush DAC90,gm 9.8 mA/V,boxed,
+ECC83,12,B-13,2,,used,12AX7,ECC803S,swap meet 2019,,unboxed,

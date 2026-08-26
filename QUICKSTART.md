@@ -55,6 +55,13 @@ Two ways in:
   `valves.py import-csv <file>`. Every new type gets classified automatically
   from its designation the same way `add` does.
 
+Beyond the quantity, maker and condition, a lot can record where it actually
+sits and where it came from: `position` (a grid reference within the box, like
+`B-12`), `type1`/`type2` (other designations the valve is marked with),
+`origin`, `test_values` and `other`. All optional - leave them blank, or leave
+the columns out of your CSV entirely, if they're not how you work. Fill them
+in later with "Edit lot" in the GUI, or `valves.py edit <lot id>`.
+
 ## 6. Filling in reference data
 
 New types start with only what the naming convention can infer - a real

@@ -48,11 +48,29 @@ import valvelib as V
 PAD = 8
 
 # Valves tab results Treeview columns: (data key, header text, pixel width).
+# Box/Pos and Type/Type 1/Type 2 are kept adjacent: the first pair answers
+# "where is it", the second "what is it called on the glass".
 STOCK_COLS = [
-    ("box", "Box", 50), ("type", "Type", 100), ("match", "Match", 90), ("qty", "Qty", 42),
+    ("box", "Box", 50), ("position", "Pos", 52),
+    ("type", "Type", 100), ("type1", "Type 1", 70), ("type2", "Type 2", 70),
+    ("match", "Match", 90), ("qty", "Qty", 42),
     ("manufacturer", "Maker", 88), ("condition", "Condition", 92),
+    ("origin", "Origin", 120),
     ("base", "Base", 64), ("function", "Function", 190), ("heater_v", "Htr V", 48),
     ("heater_a", "Htr A", 48), ("pa_max", "Pa W", 46), ("sheet", "Sheet", 44),
+]
+
+# Per-lot detail fields (stock columns beyond box/qty/maker/condition/notes),
+# as (column, label, placeholder shown in the Add/Edit lot form). Listed once
+# here so the add form, the edit form, and the upload-CSV header stay in step
+# with each other and with the schema (valvelib.ADDED_COLUMNS).
+LOT_FIELDS = [
+    ("position", "Position in box", "e.g. B-12"),
+    ("type1", "Type 1 (alt. designation)", "e.g. 6BQ5"),
+    ("type2", "Type 2 (alt. designation)", ""),
+    ("origin", "Origin", "purchase / previous owner / which set"),
+    ("test_values", "Test values", "what it measured"),
+    ("other", "Other", "boxed or unboxed, printing, ..."),
 ]
 
 # Keys that mirror the quick-search row; the advanced dialog edits the same
@@ -70,9 +88,20 @@ ADV_FIELDS = [
     ("va_max", "Va max V (e.g. >250)", str), ("gm", "gm mA/V (e.g. >5)", str),
     ("mu", "mu (e.g. >20)", str), ("power_out", "Power out W (e.g. >5)", str),
     ("equivalents", "Equivalents", str),
+    ("position", "Position in box", str), ("origin", "Origin", str),
+    ("alt", "Type 1 / Type 2", str),
     ("confidence", "Confidence", ["", "inferred", "confirmed"]),
     ("has_sheet", "Has datasheet", ["", "yes", "no"]),
 ]
+
+# Columns every Valves-tab stock query selects - shared by the main search
+# and the equivalents top-up so the two produce identically-shaped rows for
+# populate() to render against STOCK_COLS.
+STOCK_SELECT = """s.id, s.box, s.position, COALESCE(t.name, s.type_key) AS type,
+                  s.type_key, s.type1, s.type2, s.qty, s.manufacturer, s.condition,
+                  s.origin, s.test_values, s.other, s.notes, t.base,
+                  t.function, t.heater_v, t.heater_a, t.pa_max,
+                  t.datasheet_path, t.confidence"""
 
 SOCKET_COLS = [
     ("box", "Box", 60), ("base", "Base", 140), ("qty", "Qty", 50),
@@ -374,10 +403,11 @@ class TypeDetailWindow(tk.Toplevel):
                  foreground="#666").pack(anchor="w", padx=PAD, pady=(PAD, 2))
         mid = ttk.Frame(self)
         mid.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
-        tree = ttk.Treeview(mid, columns=("box", "qty", "maker", "condition"),
+        tree = ttk.Treeview(mid, columns=("box", "position", "qty", "maker", "condition", "origin"),
                             show="headings", height=8)
-        for key, label, width in (("box", "Box", 60), ("qty", "Qty", 50),
-                                  ("maker", "Maker", 140), ("condition", "Condition", 120)):
+        for key, label, width in (("box", "Box", 60), ("position", "Pos", 55),
+                                  ("qty", "Qty", 50), ("maker", "Maker", 120),
+                                  ("condition", "Condition", 100), ("origin", "Origin", 130)):
             tree.heading(key, text=label)
             tree.column(key, width=width, anchor="e" if key == "qty" else "w")
         vs = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
@@ -385,8 +415,9 @@ class TypeDetailWindow(tk.Toplevel):
         tree.pack(side="left", fill="both", expand=True)
         vs.pack(side="left", fill="y")
         for r in box_rows:
-            tree.insert("", "end", values=(r["box"], r["qty"], r["manufacturer"] or "",
-                                           r["condition"] or ""))
+            tree.insert("", "end", values=(r["box"], r["position"] or "", r["qty"],
+                                           r["manufacturer"] or "", r["condition"] or "",
+                                           r["origin"] or ""))
 
         self._render(t)
         self.bind("<Escape>", lambda e: self.destroy())
@@ -815,11 +846,17 @@ class App(ttk.Frame):
 
     def _build_valves_tab(self, root):
         """Build the Valves tab: boxes sidebar, search row, results table,
-        and the type detail/edit panel, into `root`."""
+        and the type detail/edit panel, into `root`.
+
+        Note the two editors either side of the results table do different
+        jobs: the toolbar's Edit lot changes this physical lot (where it is,
+        what it came from, what it measured), the panel on the right changes
+        the reference record shared by every lot of that type."""
         # ---- toolbar ----
         bar = ttk.Frame(root)
         bar.pack(fill="x", pady=(0, PAD))
         ttk.Button(bar, text="Add stock", command=self.do_add).pack(side="left")
+        ttk.Button(bar, text="Edit lot", command=self.do_edit_lot).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Take", command=self.do_take).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Move", command=self.do_move).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Delete lot", command=self.do_delete).pack(side="left", padx=(6, 0))
@@ -1158,9 +1195,10 @@ class App(ttk.Frame):
         m1 = ttk.Frame(right)
         m1.pack(fill="both", expand=True, pady=(2, PAD))
         self.rb_match_tree = ttk.Treeview(
-            m1, columns=("type", "box", "qty", "maker", "condition", "why"),
+            m1, columns=("type", "box", "position", "qty", "maker", "condition", "why"),
             show="headings", height=6)
-        for key, label, width in (("type", "Type", 90), ("box", "Box", 50), ("qty", "Qty", 42),
+        for key, label, width in (("type", "Type", 90), ("box", "Box", 50),
+                                  ("position", "Pos", 52), ("qty", "Qty", 42),
                                   ("maker", "Maker", 90), ("condition", "Condition", 90),
                                   ("why", "Why", 130)):
             self.rb_match_tree.heading(key, text=label)
@@ -1303,10 +1341,15 @@ class App(ttk.Frame):
         where, args = ["1=1"], []
         if self.v_text.get().strip():
             s = f"%{self.v_text.get().strip().lower()}%"
+            # reference text plus everything recorded against the lot itself,
+            # so a number only printed on the glass, or "the one out of the
+            # Bush", is findable without knowing which field it went into
             where.append("(LOWER(t.name) LIKE ? OR LOWER(t.typical_use) LIKE ? "
                          "OR LOWER(t.notes) LIKE ? OR LOWER(t.equivalents) LIKE ? "
-                         "OR LOWER(s.notes) LIKE ?)")
-            args += [s] * 5
+                         "OR LOWER(s.notes) LIKE ? OR LOWER(s.type1) LIKE ? "
+                         "OR LOWER(s.type2) LIKE ? OR LOWER(s.origin) LIKE ? "
+                         "OR LOWER(s.test_values) LIKE ? OR LOWER(s.other) LIKE ?)")
+            args += [s] * 10
         if self.v_function.get().strip():
             s = f"%{self.v_function.get().strip().lower()}%"
             where.append("(LOWER(t.function) LIKE ? OR LOWER(t.typical_use) LIKE ?)")
@@ -1342,6 +1385,15 @@ class App(ttk.Frame):
         if self.adv.get("equivalents"):
             where.append("LOWER(t.equivalents) LIKE ?")
             args.append(f"%{self.adv['equivalents'].lower()}%")
+        if self.adv.get("position"):
+            where.append("LOWER(s.position) LIKE ?")
+            args.append(f"%{self.adv['position'].lower()}%")
+        if self.adv.get("origin"):
+            where.append("LOWER(s.origin) LIKE ?")
+            args.append(f"%{self.adv['origin'].lower()}%")
+        if self.adv.get("alt"):
+            where.append("(LOWER(s.type1) LIKE ? OR LOWER(s.type2) LIKE ?)")
+            args += [f"%{self.adv['alt'].lower()}%"] * 2
         for field, key in (("t.heater_a", "heater_a"), ("t.va_max", "va_max"),
                            ("t.gm", "gm"), ("t.mu", "mu"), ("t.power_out", "power_out")):
             expr = self.adv.get(key)
@@ -1361,13 +1413,11 @@ class App(ttk.Frame):
         elif self.adv.get("has_sheet") == "no":
             where.append("t.datasheet_path IS NULL")
 
-        sql = f"""SELECT s.id, s.box, COALESCE(t.name, s.type_key) AS type,
-                         s.type_key, s.qty, s.manufacturer, s.condition, t.base,
-                         t.function, t.heater_v, t.heater_a, t.pa_max,
-                         t.datasheet_path, t.confidence
+        sql = f"""SELECT {STOCK_SELECT}
                   FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
                   WHERE {' AND '.join(where)}
-                  ORDER BY CAST(s.box AS INTEGER), s.box, type"""
+                  ORDER BY CAST(s.box AS INTEGER), s.box, s.position IS NULL,
+                           s.position, type"""
         self.rows = [dict(r) for r in self.con.execute(sql, args)]
         for r in self.rows:
             r["match"] = ""
@@ -1401,10 +1451,7 @@ class App(ttk.Frame):
             return
         have_ids = {r["id"] for r in self.rows}
         qmarks = ",".join("?" * len(expand))
-        sql = f"""SELECT s.id, s.box, COALESCE(t.name, s.type_key) AS type,
-                         s.type_key, s.qty, s.manufacturer, s.condition, t.base,
-                         t.function, t.heater_v, t.heater_a, t.pa_max,
-                         t.datasheet_path, t.confidence
+        sql = f"""SELECT {STOCK_SELECT}
                   FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
                   WHERE s.type_key IN ({qmarks})
                   ORDER BY CAST(s.box AS INTEGER), s.box, type"""
@@ -1688,18 +1735,27 @@ class App(ttk.Frame):
     # ---------------------------------------------------------------- actions
 
     def do_add(self):
-        """Prompt for a new stock lot (type/box/qty/maker/condition/notes)
-        and insert it, creating a bare inferred valve_type record first if
-        the type isn't already known."""
+        """Prompt for a new stock lot and insert it, creating a bare inferred
+        valve_type record first if the type isn't already known.
+
+        Only type and box are required; everything else, the per-lot detail
+        fields (LOT_FIELDS) included, can be left blank now and filled in
+        later with Edit lot."""
         boxes = [str(r["box"]) for r in self.con.execute(
             "SELECT DISTINCT box FROM stock ORDER BY CAST(box AS INTEGER)")]
         d = FormDialog(self.master, "Add stock", [
             ("type", "Type", "", str),
             ("box", "Box", self.current_box() or "", boxes),
+            ("position", "Position in box", "", str),
             ("qty", "Quantity", 1, int),
             ("maker", "Manufacturer", "", str),
             ("condition", "Condition", "",
              ["NOS", "used", "untested", "matched pair", "matched quad"]),
+            ("type1", "Type 1 (alt. designation)", "", str),
+            ("type2", "Type 2 (alt. designation)", "", str),
+            ("origin", "Origin", "", str),
+            ("test_values", "Test values", "", str),
+            ("other", "Other", "", str),
             ("notes", "Notes", "", str),
         ], ok_label="Add")
         if not d.result or not d.result["type"] or not d.result["box"]:
@@ -1716,10 +1772,12 @@ class App(ttk.Frame):
                  inf.get("heater_v"), inf.get("heater_a")))
             created = True
         self.con.execute(
-            """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes)
-               VALUES (?,?,?,?,?,?,?)""",
-            (key, r["box"], r["qty"] or 1, r["maker"], r["condition"],
-             datetime.date.today().isoformat(), r["notes"]))
+            """INSERT INTO stock (type_key,box,qty,manufacturer,condition,date_added,notes,
+                                  position,type1,type2,origin,test_values,other)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            [key, r["box"], r["qty"] or 1, r["maker"], r["condition"],
+             datetime.date.today().isoformat(), r["notes"]]
+            + [r[col] for col, _label, _hint in LOT_FIELDS])
         self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
                          (r["box"], "attic"))
         self.con.commit()
@@ -1727,6 +1785,52 @@ class App(ttk.Frame):
         self.run_search()
         self.set_status(f"added {r['qty']} x {r['type']} to box {r['box']}"
                         + ("  (new type created)" if created else ""))
+
+    def do_edit_lot(self):
+        """Edit everything recorded against the selected lot - where it is,
+        what it's marked as, where it came from, how it tested.
+
+        This is the per-lot counterpart to the detail panel on the right,
+        which edits the reference record shared by every lot of that type:
+        two Mullard EL84s out of different sets are one type but two lots,
+        and it's the lot that knows which shelf it's on and which set it
+        came out of. Blanking a field clears it."""
+        r = self.selected_row()
+        if not r:
+            self.set_status("select a lot first")
+            return
+        boxes = [str(x["box"]) for x in self.con.execute(
+            "SELECT DISTINCT box FROM stock ORDER BY CAST(box AS INTEGER)")]
+        fields = [("box", "Box", r["box"] or "", boxes),
+                  ("qty", "Quantity", r["qty"], int),
+                  ("maker", "Manufacturer", r["manufacturer"] or "", str),
+                  ("condition", "Condition", r["condition"] or "",
+                   ["NOS", "used", "untested", "matched pair", "matched quad"])]
+        fields += [(col, label, r.get(col) or "", str) for col, label, _hint in LOT_FIELDS]
+        fields.append(("notes", "Notes", r.get("notes") or "", str))
+        d = FormDialog(self.master, f"Edit lot - {r['type']} in box {r['box']}",
+                       fields, ok_label="Save")
+        if not d.result:
+            return
+        if not d.result["box"]:
+            self.set_status("a lot has to be in a box - nothing changed")
+            return
+        if not d.result["qty"] or d.result["qty"] < 1:
+            self.set_status("quantity has to be 1 or more - use Take or Delete lot instead")
+            return
+        cols = ["box", "qty", "manufacturer", "condition", "notes"] \
+            + [col for col, _label, _hint in LOT_FIELDS]
+        vals = [d.result["box"], d.result["qty"], d.result["maker"], d.result["condition"],
+                d.result["notes"]] + [d.result[col] for col, _label, _hint in LOT_FIELDS]
+        self.con.execute(f"UPDATE stock SET {','.join(c + '=?' for c in cols)} WHERE id=?",
+                         vals + [r["id"]])
+        self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
+                         (d.result["box"], "attic"))
+        self.con.commit()
+        self.refresh_boxes()
+        self.run_search()
+        self.set_status(f"updated lot {r['id']} - {r['type']} in box {d.result['box']}"
+                        + (f", position {d.result['position']}" if d.result["position"] else ""))
 
     def do_take(self):
         """Prompt for a quantity to remove from the selected lot; deletes
@@ -1752,8 +1856,10 @@ class App(ttk.Frame):
         self.set_status(f"took {min(n, r['qty'])} x {r['type']} from box {r['box']}")
 
     def do_move(self):
-        """Prompt for a destination box and move the selected lot there,
-        creating the box record if it doesn't exist yet."""
+        """Prompt for a destination box (and optionally a position in it) and
+        move the selected lot there, creating the box record if it doesn't
+        exist yet. Leaving the position blank clears the old one, which
+        belonged to the box the lot has just left."""
         r = self.selected_row()
         if not r:
             self.set_status("select a lot first")
@@ -1761,16 +1867,21 @@ class App(ttk.Frame):
         boxes = [str(x["box"]) for x in self.con.execute(
             "SELECT DISTINCT box FROM stock ORDER BY CAST(box AS INTEGER)")]
         d = FormDialog(self.master, f"Move {r['type']}",
-                       [("to", "To box", "", boxes)], ok_label="Move")
+                       [("to", "To box", "", boxes),
+                        ("position", "Position in that box", "", str)], ok_label="Move")
         if not d.result or not d.result["to"]:
             return
-        self.con.execute("UPDATE stock SET box=? WHERE id=?", (d.result["to"], r["id"]))
+        # a position only means anything within its own box, so the old one is
+        # replaced or cleared rather than carried across to the new box
+        self.con.execute("UPDATE stock SET box=?, position=? WHERE id=?",
+                         (d.result["to"], d.result["position"], r["id"]))
         self.con.execute("INSERT OR IGNORE INTO box (box, location) VALUES (?,?)",
                          (d.result["to"], "attic"))
         self.con.commit()
         self.refresh_boxes()
         self.run_search()
-        self.set_status(f"moved {r['type']} to box {d.result['to']}")
+        self.set_status(f"moved {r['type']} to box {d.result['to']}"
+                        + (f", position {d.result['position']}" if d.result["position"] else ""))
 
     def do_delete(self):
         """Confirm and delete the selected lot entirely."""
@@ -2015,16 +2126,16 @@ class App(ttk.Frame):
         any_matches = False
         for k, why in keys.items():
             for r in self.con.execute(
-                    "SELECT s.box, s.qty, s.manufacturer, s.condition, "
+                    "SELECT s.box, s.position, s.qty, s.manufacturer, s.condition, "
                     "COALESCE(t2.name, s.type_key) AS name FROM stock s "
                     "LEFT JOIN valve_type t2 ON t2.type_key = s.type_key "
-                    "WHERE s.type_key=? ORDER BY CAST(s.box AS INTEGER), s.box", (k,)):
+                    "WHERE s.type_key=? ORDER BY CAST(s.box AS INTEGER), s.box, s.position", (k,)):
                 any_matches = True
                 self.rb_match_tree.insert("", "end", values=(
-                    r["name"], r["box"], r["qty"], r["manufacturer"] or "",
-                    r["condition"] or "", why))
+                    r["name"], r["box"], r["position"] or "", r["qty"],
+                    r["manufacturer"] or "", r["condition"] or "", why))
         if not any_matches:
-            self.rb_match_tree.insert("", "end", values=("", "", "", "", "", "none in stock"))
+            self.rb_match_tree.insert("", "end", values=("", "", "", "", "", "", "none in stock"))
 
         self.rb_suggest_tree.delete(*self.rb_suggest_tree.get_children())
         if t and t["function"]:
@@ -2437,10 +2548,10 @@ class App(ttk.Frame):
 
     def do_help_guide(self):
         """Help > User guide. Renders a long static walkthrough of the whole
-        tool (adding/removing stock, searching, the Repair Bench tab, filling
-        in reference data via Claude, datasheets, backups, and export) in a
-        proportional-font TextWindow. Keep this in sync by hand if workflow
-        changes - it isn't generated from anything."""
+        tool (adding/editing/removing stock, searching, the Repair Bench tab,
+        filling in reference data via Claude, datasheets, backups, and
+        export) in a proportional-font TextWindow. Keep this in sync by hand
+        if workflow changes - it isn't generated from anything."""
         body = "\n".join([
             "VALVE INVENTORY - USER GUIDE", "",
             "Two front ends sharing one database: this window, and valves.py on the command "
@@ -2455,16 +2566,37 @@ class App(ttk.Frame):
             "any Claude chat. It interviews you (or reads whatever spreadsheet, notes, or "
             "photos you describe) and hands back a ready-to-import CSV.",
             "",
+            "WHAT A LOT RECORDS", "",
+            "  A lot is one physical batch: this many of this type, in this box. Beyond the "
+            "quantity, maker and condition, each lot can record where it actually sits and "
+            "where it came from - all optional, fill in as much or as little as suits you:",
+            "    Position       where in the box, as a grid reference like B-12",
+            "    Type 1 / 2     other designations the valve is marked with (a US number, "
+            "a service code) - searchable, so it doesn't matter which one you look it up by",
+            "    Origin         bought, inherited, or the set it came out of",
+            "    Test values    what it measured on a tester",
+            "    Other          anything else: boxed or unboxed, odd printing",
+            "  Select a row and click \"Edit lot\" to fill these in or change them later; the "
+            "same fields are on the Add stock form and in the upload CSV. Note the two "
+            "editors do different jobs: Edit lot changes this one physical lot, while the "
+            "panel on the right changes the reference record shared by every lot of that "
+            "type. From the command line: valves.py edit <lot id> --position B-12 ... (lot "
+            "ids are the ID column of valves.py box / find / show).",
+            "",
             "REMOVING / MOVING STOCK", "",
-            "  Select a row, then Take (use up some of a lot), Move (to another box), or "
-            "Delete lot (removes it - asks first). Same from the command line: "
-            "valves.py take/move TYPE ...",
+            "  Select a row, then Take (use up some of a lot), Move (to another box, "
+            "optionally giving its position there), or Delete lot (removes it - asks first). "
+            "Same from the command line: valves.py take/move TYPE ...",
             "",
             "SEARCHING & BROWSING", "",
             "  Valves tab search row - text, function, base, and the numeric fields (accept "
-            "'>20', '<7', '>=250'). Searching a type also pulls in anything cross-referenced "
+            "'>20', '<7', '>=250'). Text searches the lot's own fields as well as the "
+            "reference record, so \"the one out of the Bush\" or a number printed only on the "
+            "glass finds it without your having to remember which field you wrote it in. "
+            "Searching a type also pulls in anything cross-referenced "
             "as its equivalent, shown in blue and labelled which type it's equivalent to. "
-            "Advanced... opens every remaining field.",
+            "Advanced... opens every remaining field, Position, Origin and Type 1 / Type 2 "
+            "among them.",
             "  Browse tab - dropdown filters that cascade (Category, Base, Family, "
             "Confidence, Variable-mu - picking one narrows what the others offer), plus "
             "<, =, > on every numeric rating, and a live name filter as you type. "
@@ -2692,21 +2824,24 @@ class App(ttk.Frame):
 
     def do_create_upload_template(self):
         """Tools > Create upload template. Writes a blank CSV with just the
-        header row (type,box,qty,maker,condition,notes) for the user to fill
-        in before Tools > Import upload CSV."""
+        header row for the user to fill in before Tools > Import upload CSV.
+        Only type and box are required; any other column can be left blank
+        or left out of the file altogether."""
         path = filedialog.asksaveasfilename(
             defaultextension=".csv", initialfile="upload_template.csv",
             filetypes=[("CSV file", "*.csv")])
         if not path:
             return
         with open(path, "w", encoding="utf-8", newline="") as f:
-            f.write("type,box,qty,maker,condition,notes\n")
+            f.write("type,box,position,qty,maker,condition,type1,type2,origin,test,other,notes\n")
         self.set_status(f"wrote a blank upload template to {path}")
         messagebox.showinfo(
             "Template written",
             f"Wrote a blank upload template to:\n{path}\n\n"
-            "One row per lot - type and box are required, the rest optional. Fill it in, then "
-            "Tools > Import upload CSV...")
+            "One row per lot - type and box are required, the rest optional (leave a column "
+            "blank, or delete it entirely, if you don't use it). position is where in the "
+            "box, e.g. B-12; type1/type2 are alternative designations; test is what it "
+            "measured. Fill it in, then Tools > Import upload CSV...")
 
     def do_generate_csv_prompt(self):
         """Tools > Generate CSV-building prompt. Writes a static, self-
@@ -2714,7 +2849,11 @@ class App(ttk.Frame):
         interview the user about messy/incomplete records and hand back a
         CSV using the same header as do_create_upload_template's template,
         ready for Tools > Import upload CSV. Works in any plain chat - no
-        file/web access required, unlike the research/download prompts."""
+        file/web access required, unlike the research/download prompts.
+
+        The two headers are written out literally in both places rather than
+        shared through a constant, because this one has to survive being
+        copied into a chat window that knows nothing about this code."""
         lines = [
             "You are helping me turn my own valve/tube collection records into a CSV file for "
             "the valve-inventory tool. I have some existing data - it might be a spreadsheet, "
@@ -2725,11 +2864,19 @@ class App(ttk.Frame):
             "and (optional) the manufacturer, condition, and any notes. If I give you a rough "
             "photo description or a messy list, parse what you can and ask about anything "
             "unclear or ambiguous rather than assuming.", "",
+            "Ask about these too, where my records have them - all optional, and it's normal "
+            "for most rows to leave several blank:", "",
+            "  position  where in the box it sits, as a grid reference like B-12",
+            "  type1     a second designation the valve is marked with, e.g. a US number",
+            "  type2     a third designation, if it carries one",
+            "  origin    where it came from: bought, inherited, or the set it came out of",
+            "  test      what it measured on a valve tester",
+            "  other     anything else: boxed or unboxed, NOS or used, odd printing", "",
             "Once we've gone through everything, write it out as a CSV with this exact header "
             "and column order:", "",
-            "type,box,qty,maker,condition,notes", "",
+            "type,box,position,qty,maker,condition,type1,type2,origin,test,other,notes", "",
             "One row per lot. type and box are required for every row; use 1 for qty if not "
-            "given, and leave maker/condition/notes blank rather than guessing. Give me the "
+            "given, and leave any other column blank rather than guessing. Give me the "
             "finished CSV as a code block I can save directly to a file.", "",
             "--- HOW TO USE THE RESULT ---",
             "Save my reply as a .csv file, then run:",
@@ -3216,8 +3363,8 @@ class App(ttk.Frame):
         if not t:
             return
         rows = [dict(r) for r in self.con.execute(
-            "SELECT box, qty, manufacturer, condition FROM stock WHERE type_key=? "
-            "ORDER BY CAST(box AS INTEGER), box", (key,))]
+            "SELECT box, position, qty, manufacturer, condition, origin FROM stock "
+            "WHERE type_key=? ORDER BY CAST(box AS INTEGER), box, position", (key,))]
         TypeDetailWindow(self, dict(t), rows)
 
     # ---------------------------------------------------------------- docs

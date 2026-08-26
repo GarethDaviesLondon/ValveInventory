@@ -5,9 +5,11 @@ Imported by both valves.py (CLI) and valves_gui.py (GUI); nothing in this
 module is specific to either front end. It holds:
 
 - SCHEMA: the SQLite schema (tables for valve types, stock, sundries,
-  sockets and boxes, plus a convenience view), applied via executescript().
-- connect() / init_db(): open a database connection and ensure the schema
-  exists.
+  sockets and boxes), applied via executescript(), plus V_STOCK_SQL for the
+  convenience view over stock and ADDED_COLUMNS listing the columns added
+  to a table after its first release.
+- connect() / init_db() / migrate(): open a database connection, ensure the
+  schema exists, and bring an older database up to the current one in place.
 - norm(): normalise a free-text type designation into a canonical lookup
   key (valve_type.type_key).
 - classify(): given a normalised designation, guess the function, heater
@@ -57,13 +59,23 @@ CREATE TABLE IF NOT EXISTS valve_type (
 );
 
 -- One row per physical lot: this many of this type, in this box.
+-- position/type1/type2/origin/test_values/other were added later (v1.4) and
+-- are optional throughout: a lot that only ever fills in box/qty behaves
+-- exactly as it did before they existed. See migrate() for how they reach
+-- databases created by an earlier version.
 CREATE TABLE IF NOT EXISTS stock (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     type_key     TEXT REFERENCES valve_type(type_key) ON UPDATE CASCADE,
     box          TEXT NOT NULL,
+    position     TEXT,                -- where in the box, e.g. "B-12" (row-column)
     qty          INTEGER NOT NULL DEFAULT 1,
     manufacturer TEXT,
     condition    TEXT,                -- NOS, used, untested, matched pair, ...
+    type1        TEXT,                -- secondary designation as marked, e.g. a US number
+    type2        TEXT,                -- a further secondary designation
+    origin       TEXT,                -- purchase, previous owner, or the set it came out of
+    test_values  TEXT,                -- what it measured on the tester
+    other        TEXT,                -- anything else: boxed/unboxed, printing, ...
     date_added   TEXT,
     notes        TEXT
 );
@@ -120,15 +132,34 @@ CREATE INDEX IF NOT EXISTS idx_stock_box  ON stock(box);
 CREATE INDEX IF NOT EXISTS idx_socket_base ON socket(base);
 CREATE INDEX IF NOT EXISTS idx_socket_box  ON socket(box);
 CREATE INDEX IF NOT EXISTS idx_document_type ON document(type_key);
+"""
 
--- Convenience view: stock joined to its type reference data.
-CREATE VIEW IF NOT EXISTS v_stock AS
-SELECT s.id, s.box, s.qty, COALESCE(t.name, s.type_key) AS type,
-       s.type_key, s.manufacturer, s.condition,
+# Convenience view: stock joined to its type reference data. Kept out of
+# SCHEMA because CREATE VIEW IF NOT EXISTS would leave an older database
+# sitting on an older view definition for ever; migrate() drops and recreates
+# it instead, so the view always matches the columns stock actually has.
+V_STOCK_SQL = """
+CREATE VIEW v_stock AS
+SELECT s.id, s.box, s.position, s.qty, COALESCE(t.name, s.type_key) AS type,
+       s.type_key, s.type1, s.type2, s.manufacturer, s.condition,
+       s.origin, s.test_values, s.other,
        t.function, t.heater_v, t.pa_max, t.freq_max, t.base,
        t.datasheet_path, s.notes
 FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key;
 """
+
+# Columns added to existing tables after their first release, applied by
+# migrate() to databases that predate them: table -> [(column, declaration)].
+ADDED_COLUMNS = {
+    "stock": [
+        ("position", "TEXT"),
+        ("type1", "TEXT"),
+        ("type2", "TEXT"),
+        ("origin", "TEXT"),
+        ("test_values", "TEXT"),
+        ("other", "TEXT"),
+    ],
+}
 
 
 def connect(path=DB_DEFAULT):
@@ -145,17 +176,52 @@ def connect(path=DB_DEFAULT):
     return con
 
 
-def init_db(path=DB_DEFAULT):
-    """Open a connection and ensure the schema exists, creating it if needed.
+def migrate(con):
+    """Bring an existing database up to the current schema, in place.
 
-    Runs SCHEMA via executescript(); every statement in it is idempotent
-    (CREATE TABLE/INDEX/VIEW IF NOT EXISTS), so this is safe to call on an
-    existing database - it acts as both first-run setup and a no-op check
-    on later runs. Returns the open connection.
+    Two jobs, both idempotent and both safe on a database that is already
+    current (they simply find nothing to do):
+
+    1. Add any column in ADDED_COLUMNS that the table doesn't have yet.
+       SQLite's ALTER TABLE ADD COLUMN only appends a nullable column, so
+       existing rows keep every value they had and read back NULL for the
+       new one - no data is rewritten or moved.
+    2. Rebuild the v_stock view, which has to name the stock columns
+       explicitly and so goes stale the moment stock gains one.
+
+    Returns the list of "table.column" strings actually added, so a caller
+    can report what it did; the empty list means the database was already
+    up to date.
+    """
+    added = []
+    for table, columns in ADDED_COLUMNS.items():
+        if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                           (table,)).fetchone():
+            continue      # table itself is new - SCHEMA has just created it in full
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns:
+            if name not in have:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                added.append(f"{table}.{name}")
+    con.execute("DROP VIEW IF EXISTS v_stock")
+    con.executescript(V_STOCK_SQL)
+    con.commit()
+    return added
+
+
+def init_db(path=DB_DEFAULT):
+    """Open a connection and ensure the schema is present and current.
+
+    Runs SCHEMA via executescript() - every statement in it is idempotent
+    (CREATE TABLE/INDEX IF NOT EXISTS) - then migrate() to add any column a
+    database from an older version is missing and rebuild the v_stock view.
+    Safe to call on a brand-new file (first-run setup), on a current
+    database (a no-op), or on an older one (an in-place upgrade that leaves
+    existing data untouched). Returns the open connection.
     """
     con = connect(path)
     con.executescript(SCHEMA)
-    con.commit()
+    migrate(con)
     return con
 
 
