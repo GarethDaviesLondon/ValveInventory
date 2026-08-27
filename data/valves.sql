@@ -3622,78 +3622,78 @@ CREATE TABLE valve_test (
     verdict         TEXT,            -- good | weak | short | failed | ...
     notes           TEXT
 );
-INSERT INTO "valve_test" VALUES(73,37,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 38: CT160');
-INSERT INTO "valve_test" VALUES(74,218,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,5.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 216: 5 mho (sheet reads ''5 mho''; taken as 5 mA/V)');
-INSERT INTO "valve_test" VALUES(75,232,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,12.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 229: 12mA/V | Power/Output 6BGA080');
-INSERT INTO "valve_test" VALUES(76,238,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output');
-INSERT INTO "valve_test" VALUES(77,239,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output');
-INSERT INTO "valve_test" VALUES(78,410,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 425: OK');
-INSERT INTO "valve_test" VALUES(79,411,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 426: OK');
-INSERT INTO "valve_test" VALUES(80,433,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,100.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 433: 100% TV2');
-INSERT INTO "valve_test" VALUES(81,434,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'bad contacts','from RMORG sheet row 434: MAUS CONTAC. | REPARADA');
-INSERT INTO "valve_test" VALUES(82,438,NULL,'AVO CT160',NULL,NULL,-15.0,NULL,33.0,NULL,2.4,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg');
-INSERT INTO "valve_test" VALUES(83,438,NULL,'AVO CT160',NULL,NULL,-18.0,NULL,NULL,NULL,2.35,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg');
-INSERT INTO "valve_test" VALUES(84,439,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 439: OK CT160');
-INSERT INTO "valve_test" VALUES(85,440,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 440: OK CT160');
-INSERT INTO "valve_test" VALUES(86,475,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'failed','from RMORG sheet row 471: testada veio da Cx 23 com avariada');
-INSERT INTO "valve_test" VALUES(87,481,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 477: TESTADO OK');
-INSERT INTO "valve_test" VALUES(88,482,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 478: TESTADO OK');
-INSERT INTO "valve_test" VALUES(89,483,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 479: TESTADO OK');
-INSERT INTO "valve_test" VALUES(90,532,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 528: tv');
-INSERT INTO "valve_test" VALUES(91,533,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 529: tv');
-INSERT INTO "valve_test" VALUES(92,534,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 530: tv');
-INSERT INTO "valve_test" VALUES(93,537,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 533: tv');
-INSERT INTO "valve_test" VALUES(94,545,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 541: tv');
-INSERT INTO "valve_test" VALUES(95,576,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,40.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 572: 40%-45% | 10 (sheet reads ''40%-45%''; low end of the stated range)');
-INSERT INTO "valve_test" VALUES(96,586,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 582: FILAMENTO OFF');
-INSERT INTO "valve_test" VALUES(97,587,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 583: FILAMENTO OFF');
-INSERT INTO "valve_test" VALUES(98,588,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 584: FILAMENTO OFF');
-INSERT INTO "valve_test" VALUES(99,649,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 645: tv');
-INSERT INTO "valve_test" VALUES(100,655,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 651: tv');
-INSERT INTO "valve_test" VALUES(101,656,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 652: tv');
-INSERT INTO "valve_test" VALUES(102,677,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 673: tv');
-INSERT INTO "valve_test" VALUES(103,742,NULL,'TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 738: tv');
-INSERT INTO "valve_test" VALUES(104,766,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'triode section weak','from RMORG sheet row 762: cc/Cx - triodo fraco');
-INSERT INTO "valve_test" VALUES(105,841,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 837: Val OFF');
-INSERT INTO "valve_test" VALUES(106,842,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 838: Val OFF');
-INSERT INTO "valve_test" VALUES(107,843,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 839: Val OFF');
-INSERT INTO "valve_test" VALUES(108,844,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 840: Val OFF');
-INSERT INTO "valve_test" VALUES(109,845,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 841: Val OFF');
-INSERT INTO "valve_test" VALUES(110,846,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 842: Val OFF');
-INSERT INTO "valve_test" VALUES(111,849,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,120.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads ''120-135% - TV2''; low end of the stated range)');
-INSERT INTO "valve_test" VALUES(112,850,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,120.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads ''120-135% - TV2''; low end of the stated range)');
-INSERT INTO "valve_test" VALUES(113,851,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,130.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 846: 130% - TV2 | Radio RCA 262 Fiesta');
-INSERT INTO "valve_test" VALUES(114,896,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads ''teste noTV2/U, shunte a 10 %a 70'')');
-INSERT INTO "valve_test" VALUES(115,897,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads ''teste noTV2/U, shunte a 10 %a 70'')');
-INSERT INTO "valve_test" VALUES(116,905,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'noisy','from RMORG sheet row 899: Ruidosa??');
-INSERT INTO "valve_test" VALUES(117,930,NULL,'AVO CT160',NULL,NULL,-15.0,NULL,83.0,NULL,6.8,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA');
-INSERT INTO "valve_test" VALUES(118,930,NULL,'AVO CT160',NULL,NULL,-18.0,NULL,NULL,NULL,6.5,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA');
-INSERT INTO "valve_test" VALUES(119,938,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 932: OK CT160 | A SEGUNDA RCA s/ID | 10 Outra em CASA');
-INSERT INTO "valve_test" VALUES(120,983,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'very weak','from RMORG sheet row 977: MUITO FRACA DO PH BX253U');
-INSERT INTO "valve_test" VALUES(121,995,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 989: OK CT160 | vidro azul');
-INSERT INTO "valve_test" VALUES(122,1005,NULL,'AVO CT160',NULL,NULL,NULL,NULL,33.0,NULL,2.0,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA');
-INSERT INTO "valve_test" VALUES(123,1005,NULL,'AVO CT160',NULL,NULL,NULL,NULL,33.0,NULL,2.35,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA');
-INSERT INTO "valve_test" VALUES(124,1017,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1010: OKCT160');
-INSERT INTO "valve_test" VALUES(125,1218,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'weak','from RMORG sheet row 1211: FRACA');
-INSERT INTO "valve_test" VALUES(126,1219,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1212: Padrão para o TV2');
-INSERT INTO "valve_test" VALUES(127,1484,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1411: OK | Outra em CASA');
-INSERT INTO "valve_test" VALUES(128,1485,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1412: OK');
-INSERT INTO "valve_test" VALUES(129,1489,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1416: 2 novas OK por 5€cada Sr Helder ebay Radiolux');
-INSERT INTO "valve_test" VALUES(130,1500,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1421: Testada OK apesar de menção OFF na Cx.');
-INSERT INTO "valve_test" VALUES(131,1501,NULL,'AVO CT160',NULL,250.0,-5.8,NULL,25.0,NULL,6.9,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1422: Testada OK origem Zé Manel . Valores CT160 -5,8V 250 200 4,2 +-25/29mA 6,9mA/V (second section read 29 mA; screen at 200 V)');
-INSERT INTO "valve_test" VALUES(132,1597,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'weak','from RMORG sheet row 1502: FRACA');
-INSERT INTO "valve_test" VALUES(133,1610,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1515: +- CT160');
-INSERT INTO "valve_test" VALUES(134,1624,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1529: OK CT160');
-INSERT INTO "valve_test" VALUES(135,1712,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'leakage when cold','from RMORG sheet row 1624: Fuga de S a frio');
-INSERT INTO "valve_test" VALUES(136,1747,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 1659: OFF filamento | s/Cx');
-INSERT INTO "valve_test" VALUES(137,1748,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 1660: OFF filamento');
-INSERT INTO "valve_test" VALUES(138,1787,NULL,'TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1699: Padrão para o TV2');
-INSERT INTO "valve_test" VALUES(139,1812,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1724: TUNGSRAM OK');
-INSERT INTO "valve_test" VALUES(140,1813,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1725: TUNGSRAM OK');
-INSERT INTO "valve_test" VALUES(141,1814,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1726: TUNGSRAM OK');
-INSERT INTO "valve_test" VALUES(142,1815,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1727: sovietica OK');
-INSERT INTO "valve_test" VALUES(143,1988,NULL,'AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1901: OK CT160');
-INSERT INTO "valve_test" VALUES(144,2074,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'fails when hot','from RMORG sheet row 1987: OFF quando quente | 10');
+INSERT INTO "valve_test" VALUES(73,37,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 38: CT160');
+INSERT INTO "valve_test" VALUES(74,218,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,5.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 216: 5 mho (sheet reads ''5 mho''; taken as 5 mA/V)');
+INSERT INTO "valve_test" VALUES(75,232,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,12.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 229: 12mA/V | Power/Output 6BGA080');
+INSERT INTO "valve_test" VALUES(76,238,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output');
+INSERT INTO "valve_test" VALUES(77,239,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output');
+INSERT INTO "valve_test" VALUES(78,410,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 425: OK');
+INSERT INTO "valve_test" VALUES(79,411,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 426: OK');
+INSERT INTO "valve_test" VALUES(80,433,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,100.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 433: 100% TV2');
+INSERT INTO "valve_test" VALUES(81,434,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'bad contacts','from RMORG sheet row 434: MAUS CONTAC. | REPARADA');
+INSERT INTO "valve_test" VALUES(82,438,'1901-01-01','AVO CT160',NULL,NULL,-15.0,NULL,33.0,NULL,2.4,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg');
+INSERT INTO "valve_test" VALUES(83,438,'1901-01-01','AVO CT160',NULL,NULL,-18.0,NULL,NULL,NULL,2.35,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg');
+INSERT INTO "valve_test" VALUES(84,439,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 439: OK CT160');
+INSERT INTO "valve_test" VALUES(85,440,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 440: OK CT160');
+INSERT INTO "valve_test" VALUES(86,475,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'failed','from RMORG sheet row 471: testada veio da Cx 23 com avariada');
+INSERT INTO "valve_test" VALUES(87,481,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 477: TESTADO OK');
+INSERT INTO "valve_test" VALUES(88,482,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 478: TESTADO OK');
+INSERT INTO "valve_test" VALUES(89,483,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 479: TESTADO OK');
+INSERT INTO "valve_test" VALUES(90,532,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 528: tv');
+INSERT INTO "valve_test" VALUES(91,533,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 529: tv');
+INSERT INTO "valve_test" VALUES(92,534,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 530: tv');
+INSERT INTO "valve_test" VALUES(93,537,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 533: tv');
+INSERT INTO "valve_test" VALUES(94,545,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 541: tv');
+INSERT INTO "valve_test" VALUES(95,576,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,40.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 572: 40%-45% | 10 (sheet reads ''40%-45%''; low end of the stated range)');
+INSERT INTO "valve_test" VALUES(96,586,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 582: FILAMENTO OFF');
+INSERT INTO "valve_test" VALUES(97,587,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 583: FILAMENTO OFF');
+INSERT INTO "valve_test" VALUES(98,588,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 584: FILAMENTO OFF');
+INSERT INTO "valve_test" VALUES(99,649,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 645: tv');
+INSERT INTO "valve_test" VALUES(100,655,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 651: tv');
+INSERT INTO "valve_test" VALUES(101,656,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 652: tv');
+INSERT INTO "valve_test" VALUES(102,677,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 673: tv');
+INSERT INTO "valve_test" VALUES(103,742,'1901-01-01','TV',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 738: tv');
+INSERT INTO "valve_test" VALUES(104,766,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'triode section weak','from RMORG sheet row 762: cc/Cx - triodo fraco');
+INSERT INTO "valve_test" VALUES(105,841,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 837: Val OFF');
+INSERT INTO "valve_test" VALUES(106,842,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 838: Val OFF');
+INSERT INTO "valve_test" VALUES(107,843,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 839: Val OFF');
+INSERT INTO "valve_test" VALUES(108,844,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 840: Val OFF');
+INSERT INTO "valve_test" VALUES(109,845,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 841: Val OFF');
+INSERT INTO "valve_test" VALUES(110,846,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 842: Val OFF');
+INSERT INTO "valve_test" VALUES(111,849,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,120.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads ''120-135% - TV2''; low end of the stated range)');
+INSERT INTO "valve_test" VALUES(112,850,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,120.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads ''120-135% - TV2''; low end of the stated range)');
+INSERT INTO "valve_test" VALUES(113,851,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,130.0,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 846: 130% - TV2 | Radio RCA 262 Fiesta');
+INSERT INTO "valve_test" VALUES(114,896,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads ''teste noTV2/U, shunte a 10 %a 70'')');
+INSERT INTO "valve_test" VALUES(115,897,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads ''teste noTV2/U, shunte a 10 %a 70'')');
+INSERT INTO "valve_test" VALUES(116,905,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'noisy','from RMORG sheet row 899: Ruidosa??');
+INSERT INTO "valve_test" VALUES(117,930,'1901-01-01','AVO CT160',NULL,NULL,-15.0,NULL,83.0,NULL,6.8,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA');
+INSERT INTO "valve_test" VALUES(118,930,'1901-01-01','AVO CT160',NULL,NULL,-18.0,NULL,NULL,NULL,6.5,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA');
+INSERT INTO "valve_test" VALUES(119,938,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 932: OK CT160 | A SEGUNDA RCA s/ID | 10 Outra em CASA');
+INSERT INTO "valve_test" VALUES(120,983,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'very weak','from RMORG sheet row 977: MUITO FRACA DO PH BX253U');
+INSERT INTO "valve_test" VALUES(121,995,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 989: OK CT160 | vidro azul');
+INSERT INTO "valve_test" VALUES(122,1005,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,33.0,NULL,2.0,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA');
+INSERT INTO "valve_test" VALUES(123,1005,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,33.0,NULL,2.35,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA');
+INSERT INTO "valve_test" VALUES(124,1017,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1010: OKCT160');
+INSERT INTO "valve_test" VALUES(125,1218,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'weak','from RMORG sheet row 1211: FRACA');
+INSERT INTO "valve_test" VALUES(126,1219,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1212: Padrão para o TV2');
+INSERT INTO "valve_test" VALUES(127,1484,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1411: OK | Outra em CASA');
+INSERT INTO "valve_test" VALUES(128,1485,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1412: OK');
+INSERT INTO "valve_test" VALUES(129,1489,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1416: 2 novas OK por 5€cada Sr Helder ebay Radiolux');
+INSERT INTO "valve_test" VALUES(130,1500,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1421: Testada OK apesar de menção OFF na Cx.');
+INSERT INTO "valve_test" VALUES(131,1501,'1901-01-01','AVO CT160',NULL,250.0,-5.8,NULL,25.0,NULL,6.9,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1422: Testada OK origem Zé Manel . Valores CT160 -5,8V 250 200 4,2 +-25/29mA 6,9mA/V (second section read 29 mA; screen at 200 V)');
+INSERT INTO "valve_test" VALUES(132,1597,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'weak','from RMORG sheet row 1502: FRACA');
+INSERT INTO "valve_test" VALUES(133,1610,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1515: +- CT160');
+INSERT INTO "valve_test" VALUES(134,1624,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1529: OK CT160');
+INSERT INTO "valve_test" VALUES(135,1712,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'leakage when cold','from RMORG sheet row 1624: Fuga de S a frio');
+INSERT INTO "valve_test" VALUES(136,1747,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 1659: OFF filamento | s/Cx');
+INSERT INTO "valve_test" VALUES(137,1748,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'heater open','from RMORG sheet row 1660: OFF filamento');
+INSERT INTO "valve_test" VALUES(138,1787,'1901-01-01','TV2',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'from RMORG sheet row 1699: Padrão para o TV2');
+INSERT INTO "valve_test" VALUES(139,1812,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1724: TUNGSRAM OK');
+INSERT INTO "valve_test" VALUES(140,1813,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1725: TUNGSRAM OK');
+INSERT INTO "valve_test" VALUES(141,1814,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1726: TUNGSRAM OK');
+INSERT INTO "valve_test" VALUES(142,1815,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1727: sovietica OK');
+INSERT INTO "valve_test" VALUES(143,1988,'1901-01-01','AVO CT160',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'good','from RMORG sheet row 1901: OK CT160');
+INSERT INTO "valve_test" VALUES(144,2074,'1901-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'fails when hot','from RMORG sheet row 1987: OFF quando quente | 10');
 CREATE TABLE valve_type (
     type_key       TEXT PRIMARY KEY,   -- normalised: uppercase, alnum only
     name           TEXT NOT NULL,      -- display name, e.g. "ECC83"
@@ -3801,7 +3801,9 @@ INSERT INTO "valve_type" VALUES('JP97D','JP9-7D',NULL,NULL,NULL,NULL,NULL,NULL,N
 INSERT INTO "valve_type" VALUES('4125A','4-125A','beam tetrode (transmitting)',NULL,'5-pin giant',5,5.0,6.5,NULL,125.0,NULL,NULL,NULL,NULL,'Forced-air-cooled transmitting beam tetrode rated 125 W anode dissipation; RF power amplifier duty in amateur and commercial transmitters.','4D21','4\4125A~4-125A.pdf',NULL,'confirmed','Research note: multiple sources agree on filament and anode dissipation');
 INSERT INTO "valve_type" VALUES('872A','872A','half-wave rectifier (mercury vapour)',NULL,'4-pin giant',4,5.0,6.5,NULL,NULL,NULL,NULL,NULL,NULL,'Mercury-vapour high-voltage half-wave rectifier for transmitter HT supplies; needs a warm-up period before HT is applied.',NULL,'8\872A.pdf',NULL,'inferred','Research note: multiple sources agree on filament; output ratings not verified');
 INSERT INTO "valve_type" VALUES('C1112','C1112',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('C1166','C1166','Tetrodo',NULL,NULL,NULL,NULL,NULL,NULL,60.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - W: 60');
+INSERT INTO "valve_type" VALUES('C1166','C1166','Tetrodo',NULL,NULL,NULL,NULL,NULL,NULL,60.0,NULL,NULL,NULL,NULL,'The sheet records a 60 W rating in its power column, taken as anode dissipation.',NULL,NULL,NULL,'inferred','Research note: could not identify the type; dissipation from the sheet, everything else unknown
+
+from RMORG sheet - W: 60');
 INSERT INTO "valve_type" VALUES('M599B','M599B',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('M5187','M5187',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('QF451','QF451','T/R CELL',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
@@ -3810,15 +3812,25 @@ INSERT INTO "valve_type" VALUES('807','807','beam tetrode (transmitting)',NULL,'
 INSERT INTO "valve_type" VALUES('813','813','beam tetrode (transmitting)',NULL,'5-pin giant',5,10.0,5.0,NULL,100.0,NULL,NULL,NULL,NULL,'Large transmitting beam tetrode with a top-cap anode, rated 100 W anode dissipation; RF power amplifier and modulator service.',NULL,'8\813.pdf',NULL,'confirmed','Research note: multiple sources agree on filament and anode dissipation
 
 from RMORG sheet - A: 0.05; V/ohm: 2000; W: 120');
-INSERT INTO "valve_type" VALUES('1164','1164','Half-Wave Rectifier',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'1\1164.pdf',NULL,'inferred','from RMORG sheet - A: 15');
+INSERT INTO "valve_type" VALUES('1164','1164','Half-Wave Rectifier',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'The sheet records only a bare "15" in its current column, which cannot be told apart from an anode rating and so has not been recorded as a heater figure.',NULL,'1\1164.pdf',NULL,'inferred','Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 15');
 INSERT INTO "valve_type" VALUES('8122','8122','Tetrodo',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'8\8122.pdf',NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('8163','8163','Triode. Power vacuum',NULL,NULL,NULL,NULL,0.4,NULL,400.0,NULL,NULL,NULL,NULL,NULL,NULL,'8\8163.pdf',NULL,'inferred','from RMORG sheet - A: 0.4; V/ohm: 400; V/ohm: Vf 5 Volts / If 14.5 Ampere; W: 400');
+INSERT INTO "valve_type" VALUES('8163','8163','power triode (transmitting)',NULL,NULL,NULL,5.0,14.5,4000.0,400.0,NULL,200.0,NULL,NULL,'Eimac 3-400Z: a 400 W plate-dissipation zero-bias power triode with a thoriated-tungsten filament and a top anode connection, for grounded-grid HF linear amplifiers in amateur and commercial transmitters. The sheet''s "400 / 0.4 / 400" are its plate dissipation, its maximum plate current and its dissipation again, not heater figures.','3-400Z','8\8163.pdf',NULL,'confirmed','Research note: filament, dissipation and mu are well established for the 3-400Z; multiple sources agree
+
+from RMORG sheet - A: 0.4; V/ohm: 400; V/ohm: Vf 5 Volts / If 14.5 Ampere; W: 400');
 INSERT INTO "valve_type" VALUES('8552','8552','Pentode',NULL,'B8C',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('12JB6','12JB6','beam tetrode (television line output)','american (RETMA code)','B9A',9,12.6,0.9,NULL,NULL,NULL,NULL,NULL,NULL,'Novar-based line output beam tetrode; widely reused by amateurs as a cheap sweep-tube RF power amplifier.',NULL,'1\12JB6.pdf',NULL,'confirmed','Research note: heater confirmed; base and anode ratings not fully verified');
-INSERT INTO "valve_type" VALUES('2T12P','2T12P','Triodo','russian',NULL,NULL,2.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - V/ohm: Vf. 10V 1,5A');
-INSERT INTO "valve_type" VALUES('3G15C1A','3G15 C1A','Triodo',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - V/ohm: Vf 2.5 Volts / If 6 Ampere');
+INSERT INTO "valve_type" VALUES('2T12P','2T12P','Triodo','russian',NULL,NULL,10.0,1.5,NULL,NULL,NULL,NULL,NULL,NULL,'Filament rated 10 V at 1.5 A. The sheet also records a test reading of "5 mho", which at British practice is 5 mA/V.',NULL,NULL,NULL,'inferred','Research note: heater from the sheet''s own labelled figures; could not identify the type or confirm its function, low confidence
+
+from RMORG sheet - V/ohm: Vf. 10V 1,5A');
+INSERT INTO "valve_type" VALUES('3G15C1A','3G15 C1A','rectifier (gas or vapour filled)',NULL,NULL,NULL,2.5,6.0,NULL,NULL,NULL,NULL,NULL,NULL,'Directly heated rectifier. A 2.5 V, 6 A filament is the signature of a gas- or mercury-vapour rectifier of the 866A class rather than a high-vacuum type.',NULL,NULL,NULL,'inferred','Research note: filament from the sheet''s own labelled figures; function inferred from the filament rating, not confirmed, low confidence
+
+from RMORG sheet - V/ohm: Vf 2.5 Volts / If 6 Ampere');
 INSERT INTO "valve_type" VALUES('4C356268','4C35 / 6268','Thyratron',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('4PR60C8252W','4PR60C / 8252W','Pentode',NULL,NULL,NULL,20.0,NULL,NULL,60.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - A: 18; V/ohm: 20.000; W: 60');
+INSERT INTO "valve_type" VALUES('4PR60C8252W','4PR60C / 8252W','beam tetrode (pulse, transmitting)',NULL,NULL,NULL,NULL,NULL,NULL,60.0,NULL,NULL,NULL,NULL,'Eimac 4PR60C, a radial-beam pulse power tetrode; the "PR" in the designation marks the pulse-rated series and 8252W is a military equivalent number. The sheet''s "20.000" is 20,000 V in European decimal notation - a pulse anode figure, not a heater rating.',NULL,NULL,NULL,'inferred','Research note: family and dissipation identified from the designation; could not confirm the filament rating, so it is left blank rather than guessed
+
+from RMORG sheet - A: 18; V/ohm: 20.000; W: 60');
 INSERT INTO "valve_type" VALUES('6AG7','6AG7','pentode',NULL,'octal',8,6.3,0.65,NULL,NULL,11.0,NULL,NULL,NULL,'High-slope octal video output pentode, also used as an RF driver in transmitters.','6AG7GT','6\6AG7.pdf',NULL,'confirmed','Research note: multiple sources agree on base, heater and slope');
 INSERT INTO "valve_type" VALUES('6AM6S','6AM6S','RF pentode (sharp cut-off)','russian','B7G',7,6.3,0.3,NULL,NULL,7.4,NULL,NULL,NULL,'Miniature sharp cut-off wideband pentode for RF, IF and video amplifiers; a special-quality version of the 6AM6.','EF91 6AM6 Z77 CV138','6\6AM6S.pdf',NULL,'confirmed','Research note: multiple sources agree');
 INSERT INTO "valve_type" VALUES('6CD6GA','6CD6GA','beam tetrode (television line output)','american (RETMA code)','octal',8,6.3,2.5,NULL,NULL,NULL,NULL,NULL,NULL,'Large octal line output beam tetrode for television receivers; a high-power sweep tube popular with amateurs.','6CD6 25CD6','6\6CD6GA.pdf',NULL,'inferred','Research note: base and heater confirmed; anode ratings not verified');
@@ -3827,10 +3839,16 @@ INSERT INTO "valve_type" VALUES('6L6CRC6L6','6L6 CRC-6L6','beam tetrode (output)
 from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.9 Ampere / Indirect /');
 INSERT INTO "valve_type" VALUES('807W5933','807W . 5933','beam tetrode (transmitting)',NULL,'UY5',5,6.3,0.9,750.0,25.0,NULL,NULL,NULL,NULL,'Ruggedised military 807; 807W and 5933 are the same valve under two designations.','807 807W 5933',NULL,NULL,'confirmed','Research note: multiple sources agree; electrical data is that of the 807');
 INSERT INTO "valve_type" VALUES('A2426','A2426','Tetrodo',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('C1534C1134','C1534 »+-C1134','Tetrodo',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - V/ohm: 28V 0.3A ou 14V 0.6A');
+INSERT INTO "valve_type" VALUES('C1534C1134','C1534 »+-C1134','Tetrodo',NULL,NULL,NULL,28.0,0.3,NULL,NULL,NULL,NULL,NULL,NULL,'Heater wired for either of two supplies - 28 V at 0.3 A, or 14 V at 0.6 A - which is the arrangement used for equipment that has to run from either of two vehicle or aircraft supplies.',NULL,NULL,NULL,'inferred','Research note: heater from the sheet''s own labelled figures; could not identify the type, low confidence
+
+from RMORG sheet - V/ohm: 28V 0.3A ou 14V 0.6A');
 INSERT INTO "valve_type" VALUES('C1A','C1A','Thyratron',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('CV2519','CV2519','Pentode',NULL,NULL,NULL,NULL,0.2,NULL,150.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - A: 0.2; V/ohm: 500; W: 150');
-INSERT INTO "valve_type" VALUES('DH391','DH3/91','CRT','european (Mullard/Philips code)',NULL,NULL,1.4,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'D\DH391~DH3-91.pdf',NULL,'inferred','from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.3 Ampere');
+INSERT INTO "valve_type" VALUES('CV2519','CV2519','Pentode',NULL,NULL,NULL,NULL,NULL,500.0,150.0,NULL,NULL,NULL,NULL,'The sheet''s 500 V, 0.2 A and 150 W are anode figures - 500 V at 200 mA is 100 W, consistent with a 150 W dissipation rating - not heater data. A test reading of 12 mA/V is also recorded.',NULL,NULL,NULL,'inferred','Research note: anode figures read from the sheet; the CV number could not be resolved to a type and the heater is unknown, low confidence
+
+from RMORG sheet - A: 0.2; V/ohm: 500; W: 150');
+INSERT INTO "valve_type" VALUES('DH391','DH3/91','double diode + triode','european (Mullard/Philips code)',NULL,NULL,6.3,0.3,NULL,NULL,NULL,NULL,NULL,NULL,'Detector diodes plus an audio triode. The DH prefix is the Mullard-Brimar code for a double-diode-triode, and the sheet states the heater explicitly.',NULL,'D\DH391~DH3-91.pdf',NULL,'inferred','Research note: heater taken from the sheet''s own labelled figures; the exact type behind "DH3/91 . 11080" could not be confirmed, low confidence
+
+from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.3 Ampere');
 INSERT INTO "valve_type" VALUES('DH39111080','DH3-91 . 11080','CRT Mini',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('E236L','E236L','Beam power Power/Output',NULL,'K8A',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'E\E236L.pdf',NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('EL38','EL38','output pentode','european (Mullard/Philips code)','octal',8,6.3,1.4,NULL,NULL,NULL,NULL,NULL,NULL,'Large octal output pentode originally for television line output; used by amateurs for high-power single-ended audio.','6CN6','E\EL38.pdf',NULL,'inferred','Research note: base and heater confirmed; anode ratings not verified');
@@ -3859,20 +3877,30 @@ from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.6 Ampere / Indirect');
 INSERT INTO "valve_type" VALUES('6146','6146','beam tetrode (transmitting)',NULL,'octal',8,6.3,1.25,750.0,25.0,NULL,NULL,NULL,NULL,'Compact transmitting beam tetrode with a top-cap anode, the standard RF power amplifier valve of amateur and commercial HF transmitters.','6146B QEP06/40','6\6146.pdf',NULL,'confirmed','Research note: multiple sources agree on heater and anode ratings
 
 from RMORG sheet - A: 1.25; W: 25');
-INSERT INTO "valve_type" VALUES('7004','7004','Transmitting Triode, air cooled UHF',NULL,NULL,NULL,3.4,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - A: 19; V/ohm: 3.4');
+INSERT INTO "valve_type" VALUES('7004','7004','Transmitting Triode, air cooled UHF',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'The sheet records a bare 3.4 in its voltage column and 19 in its current column. Neither is labelled, and 19 A is implausible as a heater for a valve of this designation, so neither has been recorded.',NULL,NULL,NULL,'inferred','Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 19; V/ohm: 3.4');
 INSERT INTO "valve_type" VALUES('807QV0525','807 QV05-25','beam tetrode (transmitting)',NULL,'UY5',5,6.3,0.9,750.0,25.0,NULL,NULL,NULL,NULL,'The 807 transmitting beam tetrode; QV05-25 is its Mullard/Philips designation.','807 QV05-25 5933',NULL,NULL,'confirmed','Research note: multiple sources agree
 
 from RMORG sheet - A: 0.9');
 INSERT INTO "valve_type" VALUES('807W','807W','beam tetrode (transmitting)',NULL,'UY5',5,6.3,0.9,750.0,25.0,NULL,NULL,NULL,NULL,'Ruggedised military 807 transmitting beam tetrode for RF power amplifier service.','807 5933',NULL,NULL,'confirmed','Research note: multiple sources agree; electrical data is that of the 807
 
 from RMORG sheet - A: 0.9; V/ohm: 6.3');
-INSERT INTO "valve_type" VALUES('C1148B','C1148B','Transmitting Tetrode, air cooled',NULL,'B5F',NULL,NULL,5.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - A: 5');
-INSERT INTO "valve_type" VALUES('EL360','EL360','Pentode Power/Output','european (Mullard/Philips code)',NULL,NULL,6.3,1.27,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'E\EL360.pdf',NULL,'inferred','from RMORG sheet - A: 1.27; V/ohm: 6.3');
+INSERT INTO "valve_type" VALUES('C1148B','C1148B','Transmitting Tetrode, air cooled',NULL,'B5F',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'The sheet records only a bare "5" in its current column, which cannot be told apart from an anode rating and so has not been recorded as a heater figure.',NULL,NULL,NULL,'inferred','Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 5');
+INSERT INTO "valve_type" VALUES('EL360','EL360','output pentode','european (Mullard/Philips code)',NULL,NULL,6.3,1.27,NULL,NULL,NULL,NULL,NULL,NULL,'Philips EL360, a large output pentode for industrial and transmitting service.',NULL,'E\EL360.pdf',NULL,'inferred','Research note: heater figures come from the sheet''s own unlabelled voltage and current columns, and are plausible for this class of valve but not verified against a datasheet, low confidence
+
+from RMORG sheet - A: 1.27; V/ohm: 6.3');
 INSERT INTO "valve_type" VALUES('FX227','FX227','Thyratron','european (Mullard/Philips code)',NULL,NULL,13.0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred',NULL);
-INSERT INTO "valve_type" VALUES('GT1C','GT1C','Thyratron',NULL,'O5A, B5',NULL,4.0,1.3,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'G\GT1C.pdf',NULL,'inferred','from RMORG sheet - A: 1.3; V/ohm: 4');
+INSERT INTO "valve_type" VALUES('GT1C','GT1C','Thyratron',NULL,'O5A, B5',NULL,4.0,1.3,NULL,NULL,NULL,NULL,NULL,NULL,'Heater rated 4 V at 1.3 A on the sheet''s own figures.',NULL,'G\GT1C.pdf',NULL,'inferred','Research note: heater figures come from the sheet''s unlabelled voltage and current columns and are plausible but not verified; the type itself could not be identified, low confidence
+
+from RMORG sheet - A: 1.3; V/ohm: 4');
 INSERT INTO "valve_type" VALUES('K302','K-302',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'K\K302.pdf',NULL,'inferred',NULL);
 INSERT INTO "valve_type" VALUES('QB35750','QB3.5/750','beam tetrode (transmitting)',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Philips transmitting tetrode; the QB3.5/750 code indicates a 750 W anode-dissipation class valve for RF power amplifier service.',NULL,'Q\QB35750~QB3.5-750.pdf',NULL,'inferred','Research note: ratings inferred from the Philips transmitting-valve code, not from a datasheet, low confidence');
-INSERT INTO "valve_type" VALUES('QKH1978','QKH1978','Magetron',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'inferred','from RMORG sheet - V/ohm: Vf 6.3 Volts / If 1.1 Ampere / Half indirect');
+INSERT INTO "valve_type" VALUES('QKH1978','QKH1978','magnetron',NULL,NULL,NULL,6.3,1.1,NULL,NULL,NULL,NULL,NULL,NULL,'Pulsed cavity magnetron; the sheet''s second designation 2J70B places it in the wartime/post-war 2J magnetron series used as radar transmitter valves.','2J70B',NULL,NULL,'inferred','Research note: identified from the 2J70B cross-reference; filament from the sheet''s own labelled figures, operating ratings not verified
+
+from RMORG sheet - V/ohm: Vf 6.3 Volts / If 1.1 Ampere / Half indirect');
 INSERT INTO "valve_type" VALUES('QQV0640A','QQV-06-40A','double beam tetrode (transmitting)','transmitting','special',NULL,6.3,1.8,NULL,40.0,NULL,NULL,NULL,NULL,'Twin beam tetrode for push-pull VHF RF power amplifier service in amateur and commercial transmitters.','6252 5894','Q\QQV0640A~QQV06-40A.pdf',NULL,'inferred','Research note: heater and anode dissipation confirmed; base not verified
 
 from RMORG sheet - A: 0.9; V/ohm: 12.6');

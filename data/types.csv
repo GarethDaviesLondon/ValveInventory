@@ -10,7 +10,9 @@ type_key,name,function,family,base,pins,heater_v,heater_a,va_max,pa_max,gm,mu,po
 10LD11,10LD11,Double Diode-Triode Audio Frequency,,B8A,,,,,,,,,,,,,,inferred,
 10P13,10P13,output pentode,british (Mazda/Brimar code),B9A,9,10.0,0.3,,,,,,,Series-heater output pentode for British television audio and timebase stages.,,,,confirmed,Research note: heater confirmed; base and detailed ratings not fully verified
 10P14,10P14,output pentode,british (Mazda/Brimar code),B9A,9,10.0,0.3,,,,,,,Series-heater output pentode for British television receivers.,35L6,,,confirmed,Research note: heater confirmed; base and detailed ratings not fully verified
-1164,1164,Half-Wave Rectifier,,,,,,,,,,,,,,1\1164.pdf,,inferred,from RMORG sheet - A: 15
+1164,1164,Half-Wave Rectifier,,,,,,,,,,,,"The sheet records only a bare ""15"" in its current column, which cannot be told apart from an anode rating and so has not been recorded as a heater figure.",,1\1164.pdf,,inferred,"Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 15"
 117L7,117L7,half-wave rectifier + output tetrode,american (RETMA code),octal,8,117.0,0.09,,,,,,,"Combined mains rectifier and audio output tetrode with a 117 V heater run straight across the mains, for American transformerless sets.",117M7 117N7,,,inferred,Research note: heater confirmed; base and detailed ratings not verified
 117Z3,117Z3,half-wave rectifier,american (RETMA code),octal,8,117.0,0.04,,,,,,,"Half-wave HT rectifier with a 117 V heater, run directly across the mains in American transformerless receivers.",,1\117Z3.pdf,,inferred,"Research note: heater confirmed; base and output ratings not verified, low confidence"
 117Z6GT,117Z6GT,full-wave rectifier,american (RETMA code),octal,8,117.0,0.04,,,,,,,"HT rectifier with a 117 V heater run directly across the mains, for American transformerless receivers.",,1\117Z6GT.pdf,,confirmed,Research note: heater confirmed; base and output ratings not fully verified
@@ -131,7 +133,9 @@ type_key,name,function,family,base,pins,heater_v,heater_a,va_max,pa_max,gm,mu,po
 2CY5,2CY5,tetrode (mixer),,B7G,7,2.35,0.6,,,,,,,Miniature sharp cut-off tetrode used as a mixer in series-heater television tuners.,6CY5,2\2CY5.pdf,,confirmed,Research note: base and equivalent confirmed; heater not fully verified
 2D21,2D21,thyratron,,B7G,7,6.3,0.6,,,,,,,"Small gas-filled thyratron used as a trigger, relay driver and control element in industrial and computing equipment.",5727 EN91,2\2D21.pdf,,confirmed,Research note: multiple sources agree on base and heater
 2GK52FQ5A,2GK5 / 2FQ5A,triode,,B7G,7,2.35,0.6,,,,,,,Miniature VHF triode for television tuner RF amplifier stages on a series heater chain.,2GK5 2FQ5A,,,confirmed,Research note: base and equivalents confirmed; heater not fully verified
-2T12P,2T12P,Triodo,russian,,,2.0,,,,,,,,,,,,inferred,"from RMORG sheet - V/ohm: Vf. 10V 1,5A"
+2T12P,2T12P,Triodo,russian,,,10.0,1.5,,,,,,,"Filament rated 10 V at 1.5 A. The sheet also records a test reading of ""5 mho"", which at British practice is 5 mA/V.",,,,inferred,"Research note: heater from the sheet's own labelled figures; could not identify the type or confirm its function, low confidence
+
+from RMORG sheet - V/ohm: Vf. 10V 1,5A"
 2X2,2X2,HV half-wave rectifier,,UX4,4,2.5,1.75,,,,,,,"High-voltage half-wave rectifier with a top-cap anode, used for CRT and transmitter bias supplies.",,2\2X2.pdf,,confirmed,Research note: filament confirmed; base and output ratings not fully verified
 309A,309A,,,,,,,,,,,,,,,3\309A.pdf,,inferred,
 31JS6C,31JS6C,beam tetrode (television line output),,magnoval,9,31.0,0.45,,,,,,,Sweep tube for television line output on a series heater chain; the series-heater 6JS6C.,6JS6C,,,inferred,Research note: heater and family confirmed; anode ratings not verified
@@ -168,7 +172,9 @@ type_key,name,function,family,base,pins,heater_v,heater_a,va_max,pa_max,gm,mu,po
 3DC3,3DC3,damper diode,,B9A,9,3.15,1.2,,,,,,,Damper (booster) diode for series-heater television line timebases.,,,,confirmed,Research note: heater confirmed; base and output ratings not fully verified
 3DF3,3DF3,damper diode,,B9A,9,3.15,1.2,,,,,,,Damper (booster) diode for series-heater television line timebases.,,3\3DF3.pdf,,confirmed,Research note: heater confirmed; base and output ratings not fully verified
 3DG4,3DG4,full-wave rectifier,,octal,8,3.15,1.4,,,,,,,HT rectifier for series-heater television receivers.,,3\3DG4.pdf,,confirmed,Research note: heater confirmed; base and output ratings not fully verified
-3G15C1A,3G15 C1A,Triodo,,,,,,,,,,,,,,,,inferred,from RMORG sheet - V/ohm: Vf 2.5 Volts / If 6 Ampere
+3G15C1A,3G15 C1A,rectifier (gas or vapour filled),,,,2.5,6.0,,,,,,,"Directly heated rectifier. A 2.5 V, 6 A filament is the signature of a gas- or mercury-vapour rectifier of the 866A class rather than a high-vacuum type.",,,,inferred,"Research note: filament from the sheet's own labelled figures; function inferred from the filament rating, not confirmed, low confidence
+
+from RMORG sheet - V/ohm: Vf 2.5 Volts / If 6 Ampere"
 3GK5,3GK5,triode,,B7G,7,3.15,0.6,,,,,,,Miniature VHF triode for series-heater television tuner RF stages.,6GK5,3\3GK5.pdf,,confirmed,Research note: base and equivalent confirmed; heater not fully verified
 3KP1F,3KP1(F),cathode ray tube,,,,,,,,,,,,"Three-inch cathode ray tube with a P1 (green, medium-persistence) phosphor, for oscilloscope and radar indicator service.",,,,inferred,"Research note: identified as a CRT from its designation; screen and deflection ratings not verified
 
@@ -188,7 +194,9 @@ from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.6 Ampere / Indirect"
 4EH7,4EH7,variable-mu RF pentode,,B9A,9,4.0,0.6,,,,,,,High-slope frame-grid variable-mu pentode for series-heater IF stages; the series-heater EF183.,EF183 6EH7,4\4EH7.pdf,,confirmed,Research note: base and equivalent confirmed; heater not fully verified
 4JD6,4JD6,,,,,,,,,,,,,,,4\4JD6.pdf,,inferred,
 4LJ8,4LJ8,,,,,,,,,,,,,,,,,inferred,
-4PR60C8252W,4PR60C / 8252W,Pentode,,,,20.0,,,60.0,,,,,,,,,inferred,from RMORG sheet - A: 18; V/ohm: 20.000; W: 60
+4PR60C8252W,4PR60C / 8252W,"beam tetrode (pulse, transmitting)",,,,,,,60.0,,,,,"Eimac 4PR60C, a radial-beam pulse power tetrode; the ""PR"" in the designation marks the pulse-rated series and 8252W is a military equivalent number. The sheet's ""20.000"" is 20,000 V in European decimal notation - a pulse anode figure, not a heater rating.",,,,inferred,"Research note: family and dissipation identified from the designation; could not confirm the filament rating, so it is left blank rather than guessed
+
+from RMORG sheet - A: 18; V/ohm: 20.000; W: 60"
 501,501,DELAY RELAY B2110 117V 300SEC,,B8A,,,,,,,,,,,,,,inferred,
 501B1937,501-B1937,,,,,,,,,,,,,,,,,inferred,
 50A5,50A5,beam tetrode (output),american (RETMA code),octal,8,50.0,0.15,,,,,,,Audio output beam tetrode for AC/DC receivers on a 150 mA series heater chain.,,5\50A5.pdf,,inferred,Research note: base and heater confirmed; detailed ratings not verified
@@ -429,7 +437,9 @@ from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.9 Ampere / Indirect /"
 6X5GT,6X5GT,full-wave rectifier,american (RETMA code),octal,8,6.3,0.6,,,,,,,"Glass octal indirectly heated full-wave HT rectifier, about 70 mA output.",6X5 EZ35 U147,6\6X5GT.pdf,,confirmed,Research note: multiple sources agree
 6X8,6X8,triode + pentode,american (RETMA code),B9A,9,6.3,0.45,,,,,,,Triode plus pentode for television mixer-oscillator duty.,,6\6X8.pdf,,inferred,Research note: base and heater confirmed; detailed ratings not verified
 70,70?,,,B8,,,,,,,,,,,,,,inferred,
-7004,7004,"Transmitting Triode, air cooled UHF",,,,3.4,,,,,,,,,,,,inferred,from RMORG sheet - A: 19; V/ohm: 3.4
+7004,7004,"Transmitting Triode, air cooled UHF",,,,,,,,,,,,"The sheet records a bare 3.4 in its voltage column and 19 in its current column. Neither is labelled, and 19 A is implausible as a heater for a valve of this designation, so neither has been recorded.",,,,inferred,"Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 19; V/ohm: 3.4"
 725A,725A,magnetron,,,,,,,,,,,,"Pulsed cavity magnetron of wartime design, used as the transmitter valve in X-band radar sets.",,7\725A.pdf,,inferred,Research note: identified from its designation; operating ratings not verified
 73,73,High-vacuum Rectifier,,K8A,,,,,,,,,,,,7\73.pdf,,inferred,
 7360,7360,beam deflection tube,,B9A,9,6.3,0.36,,,,,,,"Beam-deflection valve used as a balanced modulator, mixer and product detector in SSB equipment.",,7\7360.pdf,,inferred,Research note: base and heater confirmed; detailed ratings not verified
@@ -471,7 +481,9 @@ from RMORG sheet - A: 0.9; V/ohm: 6.3"
 from RMORG sheet - A: 0.05; V/ohm: 2000; W: 120"
 815VT287,815 / VT287,double beam tetrode (transmitting),,special,,6.3,0.8,,,,,,,Twin beam tetrode for push-pull VHF RF power amplifier service; VT287 is its American military designation.,815 VT287,,,inferred,Research note: heater confirmed; base and anode ratings not verified
 816,816,half-wave rectifier (mercury vapour),,UX4,4,2.5,2.0,,,,,,,Mercury-vapour high-voltage half-wave rectifier for transmitter HT supplies; requires warm-up before HT is applied.,,8\816.pdf,,confirmed,Research note: filament confirmed; base and output ratings not fully verified
-8163,8163,Triode. Power vacuum,,,,,0.4,,400.0,,,,,,,8\8163.pdf,,inferred,from RMORG sheet - A: 0.4; V/ohm: 400; V/ohm: Vf 5 Volts / If 14.5 Ampere; W: 400
+8163,8163,power triode (transmitting),,,,5.0,14.5,4000.0,400.0,,200.0,,,"Eimac 3-400Z: a 400 W plate-dissipation zero-bias power triode with a thoriated-tungsten filament and a top anode connection, for grounded-grid HF linear amplifiers in amateur and commercial transmitters. The sheet's ""400 / 0.4 / 400"" are its plate dissipation, its maximum plate current and its dissipation again, not heater figures.",3-400Z,8\8163.pdf,,confirmed,"Research note: filament, dissipation and mu are well established for the 3-400Z; multiple sources agree
+
+from RMORG sheet - A: 0.4; V/ohm: 400; V/ohm: Vf 5 Volts / If 14.5 Ampere; W: 400"
 83V,83V,full-wave rectifier,,octal,8,5.0,2.0,,,,,,,"Indirectly heated high-vacuum full-wave HT rectifier, the vacuum counterpart of the mercury-vapour type 83.",,8\83V.pdf,,inferred,Research note: base and heater confirmed; output ratings not verified
 84,84,full-wave rectifier,,UX5,5,6.3,0.5,,,,,,,Indirectly heated full-wave HT rectifier of the 1930s for small mains receivers.,6Z4,8\84.pdf,,inferred,Research note: heater and equivalent confirmed; base and output ratings not verified
 8552,8552,Pentode,,B8C,,,,,,,,,,,,,,inferred,
@@ -513,9 +525,15 @@ B443,B443,,,,,,,,,,,,,,,B\B443.pdf,,inferred,
 BL696,BL-696,VALVULA TR Radioactiva - entregue CT1 Fidelidadae,european (Mullard/Philips code),,,,0.18,,,,,,,,,,,inferred,
 BS810,BS810,T/R CELL,european (Mullard/Philips code),,,,0.18,,,,,,,,,B\BS810.pdf,,inferred,
 C1112,C1112,,,,,,,,,,,,,,,,,inferred,
-C1148B,C1148B,"Transmitting Tetrode, air cooled",,B5F,,,5.0,,,,,,,,,,,inferred,from RMORG sheet - A: 5
-C1166,C1166,Tetrodo,,,,,,,60.0,,,,,,,,,inferred,from RMORG sheet - W: 60
-C1534C1134,C1534 »+-C1134,Tetrodo,,,,,,,,,,,,,,,,inferred,from RMORG sheet - V/ohm: 28V 0.3A ou 14V 0.6A
+C1148B,C1148B,"Transmitting Tetrode, air cooled",,B5F,,,,,,,,,,"The sheet records only a bare ""5"" in its current column, which cannot be told apart from an anode rating and so has not been recorded as a heater figure.",,,,inferred,"Research note: could not identify the type; no reliable data
+
+from RMORG sheet - A: 5"
+C1166,C1166,Tetrodo,,,,,,,60.0,,,,,"The sheet records a 60 W rating in its power column, taken as anode dissipation.",,,,inferred,"Research note: could not identify the type; dissipation from the sheet, everything else unknown
+
+from RMORG sheet - W: 60"
+C1534C1134,C1534 »+-C1134,Tetrodo,,,,28.0,0.3,,,,,,,"Heater wired for either of two supplies - 28 V at 0.3 A, or 14 V at 0.6 A - which is the arrangement used for equipment that has to run from either of two vehicle or aircraft supplies.",,,,inferred,"Research note: heater from the sheet's own labelled figures; could not identify the type, low confidence
+
+from RMORG sheet - V/ohm: 28V 0.3A ou 14V 0.6A"
 C1A,C1A,Thyratron,,,,,,,,,,,,,,,,inferred,
 CAIXASDEVALVULAS,Caixas de Valvulas,,,,,,,,,,,,,,,,,inferred,
 CB1,CB1,,,,,,,,,,,,,,,C\CB1.pdf,,inferred,
@@ -529,7 +547,9 @@ CL33,CL33,output pentode,european (Mullard/Philips code),octal,8,33.0,0.2,,,,,,,
 CRC6L6,CRC-6L6,beam tetrode (output),,octal,8,6.3,0.9,360.0,19.0,6.0,,,,"A 6L6 carrying the RCA ""CRC"" factory marking; electrically the standard octal beam power output tetrode.",6L6 6L6G,,,confirmed,Research note: designation is a maker's marking; electrical data is that of the standard 6L6
 CV131,CV131,,european (Mullard/Philips code),,,,0.2,,,,,,,,,,,inferred,
 CV2453,CV2453,,,,,,,,,,,,,,,,,inferred,
-CV2519,CV2519,Pentode,,,,,0.2,,150.0,,,,,,,,,inferred,from RMORG sheet - A: 0.2; V/ohm: 500; W: 150
+CV2519,CV2519,Pentode,,,,,,500.0,150.0,,,,,"The sheet's 500 V, 0.2 A and 150 W are anode figures - 500 V at 200 mA is 100 W, consistent with a 150 W dissipation rating - not heater data. A test reading of 12 mA/V is also recorded.",,,,inferred,"Research note: anode figures read from the sheet; the CV number could not be resolved to a type and the heater is unknown, low confidence
+
+from RMORG sheet - A: 0.2; V/ohm: 500; W: 150"
 CV3982,CV3982,,,,,,,,,,,,,,,,,inferred,
 CV422,CV422,,european (Mullard/Philips code),K8A,,,0.2,,,,,,,,,,,inferred,
 CV483,CV483,,european (Mullard/Philips code),,,,0.2,,,,,,,,,,,inferred,
@@ -539,7 +559,9 @@ DAF96,DAF96,signal diode + pentode,european (Mullard/Philips code),B7G,7,1.4,0.0
 DF91,DF91,variable-mu RF pentode,european (Mullard/Philips code),B7G,7,1.4,0.05,,,,,,,Battery RF/IF pentode for portable receivers; the European designation of the 1T4.,1T4,D\DF91.pdf,,confirmed,"Research note: base, filament and equivalent confirmed"
 DF96,DF96,variable-mu RF pentode,european (Mullard/Philips code),B7G,7,1.4,0.025,,,,,,,Low-consumption battery RF/IF pentode for portable receivers.,1AJ4,D\DF96.pdf,,inferred,Research note: base and filament confirmed; detailed ratings not verified
 DF97,DF97,RF pentode,european (Mullard/Philips code),B7G,7,1.4,0.025,,,,,,,Low-consumption battery RF/IF pentode for portable receivers.,,D\DF97.pdf,,inferred,Research note: base and filament confirmed; detailed ratings not verified
-DH391,DH3/91,CRT,european (Mullard/Philips code),,,1.4,,,,,,,,,,D\DH391~DH3-91.pdf,,inferred,from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.3 Ampere
+DH391,DH3/91,double diode + triode,european (Mullard/Philips code),,,6.3,0.3,,,,,,,"Detector diodes plus an audio triode. The DH prefix is the Mullard-Brimar code for a double-diode-triode, and the sheet states the heater explicitly.",,D\DH391~DH3-91.pdf,,inferred,"Research note: heater taken from the sheet's own labelled figures; the exact type behind ""DH3/91 . 11080"" could not be confirmed, low confidence
+
+from RMORG sheet - V/ohm: Vf 6.3 Volts / If 0.3 Ampere"
 DH39111080,DH3-91 . 11080,CRT Mini,,,,,,,,,,,,,,,,inferred,
 DH776AT6,DH77-6AT6,double diode + triode,,B7G,7,6.3,0.3,,,,100.0,,,Detector diodes plus a high-mu audio triode; DH77 is the Mullard-Brimar designation of the 6AT6.,DH77 6AT6 EBC90,,,confirmed,Research note: multiple sources agree
 DK90,DK90,pentagrid converter (heptode),european (Mullard/Philips code),B7G,7,1.4,0.05,,,,,,,Battery pentagrid frequency changer for portable superhet receivers.,1R5,,,confirmed,"Research note: base, filament and equivalent confirmed"
@@ -644,7 +666,9 @@ EL12,EL12,output pentode,european (Mullard/Philips code),octal,8,6.3,1.4,,,,,,,"
 EL180,EL180,pentode,european (Mullard/Philips code),B9A,9,6.3,0.3,,,,,,,Noval video output pentode for television receivers.,,,,confirmed,Research note: base confirmed; heater and detailed ratings not fully verified
 EL183,EL183,output pentode,european (Mullard/Philips code),B9A,9,6.3,,,,,,,,Noval output pentode used as a video output valve in television receivers.,,E\EL183.pdf,,inferred,"Research note: could not confirm heater current or anode ratings, low confidence"
 EL34,EL34,output pentode,european (Mullard/Philips code),octal,8,6.3,1.5,800.0,25.0,11.0,,11.0,,The classic large European audio output pentode; about 11 W single-ended and 50-100 W in push-pull pairs or quads. A mainstay of hi-fi and British guitar amplifiers.,6CA7 KT77 CV1741,E\EL34.pdf,,confirmed,Research note: multiple sources agree
-EL360,EL360,Pentode Power/Output,european (Mullard/Philips code),,,6.3,1.27,,,,,,,,,E\EL360.pdf,,inferred,from RMORG sheet - A: 1.27; V/ohm: 6.3
+EL360,EL360,output pentode,european (Mullard/Philips code),,,6.3,1.27,,,,,,,"Philips EL360, a large output pentode for industrial and transmitting service.",,E\EL360.pdf,,inferred,"Research note: heater figures come from the sheet's own unlabelled voltage and current columns, and are plausible for this class of valve but not verified against a datasheet, low confidence
+
+from RMORG sheet - A: 1.27; V/ohm: 6.3"
 EL38,EL38,output pentode,european (Mullard/Philips code),octal,8,6.3,1.4,,,,,,,Large octal output pentode originally for television line output; used by amateurs for high-power single-ended audio.,6CN6,E\EL38.pdf,,inferred,Research note: base and heater confirmed; anode ratings not verified
 EL41,EL41,output pentode,european (Mullard/Philips code),B8A,8,6.3,0.2,,,,,,,"Rimlock audio output pentode for post-war European broadcast receivers, about 3 W output.",6CK5,E\EL41.pdf,,inferred,Research note: base and heater confirmed; detailed ratings not verified
 EL42,EL42,output pentode,european (Mullard/Philips code),B8A,8,6.3,0.2,,,,,,,Rimlock audio output pentode for small post-war European receivers.,,E\EL42.pdf,,inferred,Research note: base and heater confirmed; detailed ratings not verified
@@ -677,7 +701,9 @@ EZ81,EZ81,full-wave rectifier,european (Mullard/Philips code),B9A,9,6.3,1.0,,,,,
 EZ90,EZ90,full-wave rectifier,european (Mullard/Philips code),B7G,7,6.3,0.6,,,,,,,Miniature indirectly heated full-wave HT rectifier; the European designation of the 6X4.,6X4 CV493,,,confirmed,Research note: multiple sources agree
 FX227,FX227,Thyratron,european (Mullard/Philips code),,,13.0,,,,,,,,,,,,inferred,
 GM617,GM617,"Contador Geiger 20X0,8cm GM61732651474",european (Mullard/Philips code),,,5.0,,,,,,,,,,,,inferred,
-GT1C,GT1C,Thyratron,,"O5A, B5",,4.0,1.3,,,,,,,,,G\GT1C.pdf,,inferred,from RMORG sheet - A: 1.3; V/ohm: 4
+GT1C,GT1C,Thyratron,,"O5A, B5",,4.0,1.3,,,,,,,Heater rated 4 V at 1.3 A on the sheet's own figures.,,G\GT1C.pdf,,inferred,"Research note: heater figures come from the sheet's unlabelled voltage and current columns and are plausible but not verified; the type itself could not be identified, low confidence
+
+from RMORG sheet - A: 1.3; V/ohm: 4"
 GZ41,GZ41,full-wave rectifier,european (Mullard/Philips code),B8A,8,6.3,1.0,,,,,,,Rimlock indirectly heated full-wave HT rectifier for receivers and amplifiers.,,G\GZ41.pdf,,confirmed,Research note: base confirmed; heater current and output ratings not fully verified
 HS200,HS200,,european (Mullard/Philips code),,,,0.15,,,,,,,,,,,inferred,
 JP97D,JP9-7D,,,,,,,,,,,,,,,J\JP97D~JP9-7D.pdf,,inferred,
@@ -762,7 +788,9 @@ PY81,PY81,HV half-wave rectifier,european (Mullard/Philips code),B9A,9,17.0,0.3,
 PY88,PY88,HV half-wave rectifier,european (Mullard/Philips code),B9A,9,25.0,0.3,,,,,,,Booster-diode/efficiency rectifier for the line timebase of series-heater television receivers.,,P\PY88.pdf,,inferred,Research note: base and heater confirmed; output ratings not verified
 QB35750,QB3.5/750,beam tetrode (transmitting),,,,,,,,,,,,Philips transmitting tetrode; the QB3.5/750 code indicates a 750 W anode-dissipation class valve for RF power amplifier service.,,Q\QB35750~QB3.5-750.pdf,,inferred,"Research note: ratings inferred from the Philips transmitting-valve code, not from a datasheet, low confidence"
 QF451,QF451,T/R CELL,,,,,,,,,,,,,,,,inferred,
-QKH1978,QKH1978,Magetron,,,,,,,,,,,,,,,,inferred,from RMORG sheet - V/ohm: Vf 6.3 Volts / If 1.1 Ampere / Half indirect
+QKH1978,QKH1978,magnetron,,,,6.3,1.1,,,,,,,Pulsed cavity magnetron; the sheet's second designation 2J70B places it in the wartime/post-war 2J magnetron series used as radar transmitter valves.,2J70B,,,inferred,"Research note: identified from the 2J70B cross-reference; filament from the sheet's own labelled figures, operating ratings not verified
+
+from RMORG sheet - V/ohm: Vf 6.3 Volts / If 1.1 Ampere / Half indirect"
 QQE0640,QQE06/40,double beam tetrode (transmitting),,special,,6.3,1.8,,40.0,,,,,Twin beam tetrode for push-pull VHF RF power amplifier service; the Philips designation of the QQV06-40A.,QQV06-40A 6252 5894,Q\QQE0640~QQE06-40.pdf,,inferred,Research note: heater and anode dissipation confirmed; base not verified
 QQV0620,QQV0620,double beam tetrode (transmitting),transmitting,special,,6.3,0.9,,20.0,,,,,"Twin beam tetrode for push-pull VHF RF power amplifier service, a smaller companion to the QQV06-40A.",,,,confirmed,Research note: heater confirmed; base and anode ratings not fully verified
 QQV0640A,QQV-06-40A,double beam tetrode (transmitting),transmitting,special,,6.3,1.8,,40.0,,,,,Twin beam tetrode for push-pull VHF RF power amplifier service in amateur and commercial transmitters.,6252 5894,Q\QQV0640A~QQV06-40A.pdf,,inferred,"Research note: heater and anode dissipation confirmed; base not verified

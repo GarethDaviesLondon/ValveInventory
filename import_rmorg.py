@@ -76,6 +76,12 @@ COLS = {
 # record a box of loose components rather than a valve, and become sundries.
 COMPONENTS = "COMPONENTES"
 
+# The sheet records no test dates. A test recovered from it is still a real
+# test, so it gets a date that cannot be mistaken for one: nothing was tested
+# on this day, because the thermionic valve had not been invented yet. It
+# sorts and displays cleanly where a NULL reads as "nothing recorded".
+UNDATED = "1901-01-01"
+
 # ESTADO holds two different kinds of thing: a plain statement of condition,
 # and a tester reading. Anything in this table is a condition and lands in
 # stock.condition; everything else is a measurement and is kept verbatim in
@@ -227,14 +233,19 @@ def type_records(rows):
     for key, counter in names.items():
         rec = dict(best[key])
         rec["name"] = min(counter.most_common(), key=lambda kv: (-kv[1], len(kv[0])))[0]
-        # the unit columns are per-row rather than per-type, so they were
-        # gathered as raw text; parse what can be parsed, keep all of it
+        # The unit columns are per-row rather than per-type, so they were
+        # gathered as raw text. Heater figures are taken only where the cell
+        # labels them (see parse_heater); a bare number in either column is
+        # left to notes, because the sheet uses both for anode ratings too.
+        # "Potencia W" is the one column that means what it says.
         for text in sorted(raw_units.get(key, ())):
             label, _, value = text.partition(": ")
-            if label == "V/ohm" and rec.get("heater_v") is None:
-                rec["heater_v"] = parse_number(value, 120)
-            elif label == "A" and rec.get("heater_a") is None:
-                rec["heater_a"] = parse_number(value, 5)
+            if label in ("V/ohm", "A"):
+                v, a = parse_heater(value)
+                if v is not None and rec.get("heater_v") is None:
+                    rec["heater_v"] = v
+                if a is not None and rec.get("heater_a") is None:
+                    rec["heater_a"] = a
             elif label == "W" and rec.get("pa_max") is None:
                 rec["pa_max"] = parse_number(value, 100000)
         if raw_units.get(key):
@@ -360,6 +371,49 @@ EXPLICIT_TESTS = {
 NOT_A_TEST = {"NOS", "USADA", "USADAS", "USADOS", "S/CX", "SNO1918",
               "SCREEN-GRID TETRODE", "STROBE TUBE", "CX EM LATA AL-"}
 
+_VF_IF_RE = re.compile(
+    r"Vf\.?\s*(\d+[.,]?\d*)\s*(?:V|Volts?)"
+    r"(?:.*?If:?\s*(\d+[.,]?\d*)\s*(?:A|Ampere?s?))?", re.I)
+# "28V 0.3A ou 14V 0.6A" - a heater wired for either of two supplies
+_V_A_RE = re.compile(r"^(\d+[.,]?\d*)\s*V\s+(\d+[.,]?\d*)\s*A\b", re.I)
+
+
+_BARE_A_RE = re.compile(r"(\d+[.,]?\d*)\s*A(?:mp|\b)", re.I)
+
+
+def parse_heater(text):
+    """Filament volts and amps from a unit cell, or (None, None).
+
+    Only text that says which is which counts - "Vf 5 Volts / If 14.5
+    Ampere", or "28V 0.3A" where the units are written against the numbers.
+
+    A bare number is refused however plausible it looks, because these two
+    columns hold two different quantities and nothing in the row says which.
+    The 807W row reads 6.3 and 0.9, and that really is its filament; the 813
+    row reads 2000 and 0.05, which are anode figures for a valve whose
+    filament is 10 V at 5 A; the 3-400Z row reads 400 and 0.4, its plate
+    dissipation and maximum plate current, for a filament that actually draws
+    14.5 A. All three are transmitting valves, so the type is no guide either.
+    Guessing wrong writes a plausible, wrong heater rating into the reference
+    table, which is worse than leaving it empty for research to fill.
+
+    Everything rejected here still reaches valve_type.notes verbatim.
+    """
+    if not text:
+        return None, None
+    m = _VF_IF_RE.search(text) or _V_A_RE.match(text.strip())
+    if not m:
+        return None, None
+    v = float(m.group(1).replace(",", "."))
+    a = float(m.group(2).replace(",", ".")) if m.group(2) else None
+    if a is None:
+        # "Vf. 10V 1,5A" states the current without labelling it If
+        m2 = _BARE_A_RE.search(text)
+        if m2:
+            a = float(m2.group(1).replace(",", "."))
+    return v, a
+
+
 _GM_RE = re.compile(r"(\d+[.,]?\d*)\s*mA/V", re.I)
 _PCT_RE = re.compile(r"(\d+)\s*%")
 
@@ -392,10 +446,9 @@ def parse_tests(r):
     reading, and a test is emitted only if at least one of those turned up -
     "NOS" on its own is a statement of condition, not a measurement.
 
-    tested_on is deliberately left unset: the sheet records no test dates, and
-    stamping today's date would assert that every one of these was measured on
-    the day of the import. The source text travels in notes either way, so
-    nothing here has to be taken on trust.
+    tested_on is set to UNDATED rather than today: the sheet records no test
+    dates, and stamping the day of the import would assert one. The source
+    text travels in notes either way, so nothing here has to be taken on trust.
     """
     tests = [dict(t) for t in EXPLICIT_TESTS.get(r["_row"], [])]
     raw = " | ".join(x for x in (r.get("_state"), r.get("_obs"), r.get("_notas")) if x)
@@ -435,11 +488,12 @@ TEST_COLS = ("tester", "section", "va", "vg", "bias_mode", "ia", "ig2", "gm",
 
 
 def insert_test(con, valve_id, t):
-    """Insert one valve_test row, leaving tested_on NULL (see parse_tests)."""
+    """Insert one valve_test row, dated UNDATED (see parse_tests)."""
     cols = [c for c in TEST_COLS if t.get(c) is not None]
     con.execute(
-        f"INSERT INTO valve_test (valve_id,{','.join(cols)}) "
-        f"VALUES (?{',?' * len(cols)})", [valve_id] + [t[c] for c in cols])
+        f"INSERT INTO valve_test (valve_id,tested_on,{','.join(cols)}) "
+        f"VALUES (?,?{',?' * len(cols)})",
+        [valve_id, UNDATED] + [t[c] for c in cols])
 
 
 def group_lots(prepared, group):
