@@ -28,3 +28,6 @@ venv/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Remembered interface language (per-machine UI state, not project data)
+.lang

@@ -44,6 +44,9 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import valvelib as V
+import i18n
+import guide
+from i18n import t, tn
 
 PAD = 8
 
@@ -326,6 +329,8 @@ class FormDialog(tk.Toplevel):
         x = parent.winfo_rootx() + (parent.winfo_width() - self.winfo_width()) // 2
         y = parent.winfo_rooty() + 120
         self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        # before grab_set/wait_window, which block until the dialog closes
+        i18n.apply(self)
         self.grab_set()
         self.wait_window(self)
 
@@ -374,6 +379,7 @@ class TextWindow(tk.Toplevel):
         txt.configure(state="disabled")
         self.update_idletasks()
         self.geometry(f"+{parent.winfo_rootx() + 90}+{parent.winfo_rooty() + 60}")
+        i18n.apply(self)
 
 
 # Reference fields shown in TypeDetailWindow's info block, in display order.
@@ -450,6 +456,7 @@ class TypeDetailWindow(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 100}+{app.master.winfo_rooty() + 80}")
+        i18n.apply(self)
 
     def _open_lot(self, _event=None):
         """Open the individual-valves view for the double-clicked lot.
@@ -598,6 +605,7 @@ class LotValvesDialog(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 60}+{app.master.winfo_rooty() + 60}")
+        i18n.apply(self)
 
     # ---- data ----
 
@@ -844,6 +852,7 @@ class DatasheetManagerDialog(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 110}+{app.master.winfo_rooty() + 90}")
+        i18n.apply(self)
 
     def _refresh_primary(self):
         if self.app.has_local_sheet(self._primary_path):
@@ -1007,6 +1016,7 @@ class EditParamsDialog(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 140}+{app.master.winfo_rooty() + 110}")
+        i18n.apply(self)
 
     def _load(self):
         """Fill the form from the current database row."""
@@ -1069,6 +1079,16 @@ class App(ttk.Frame):
         self.pack(fill="both", expand=True)
 
         self._build_menu()
+
+        # Language switch, top right. Built before the notebook so it sits on
+        # its own strip above the tabs, clear of every tab's own toolbar -
+        # see i18n.FlagSwitch.
+        header = ttk.Frame(self)
+        header.pack(fill="x", pady=(0, 4))
+        ttk.Label(header, text="Language").pack(side="right", padx=(0, 6))
+        self.flags = i18n.FlagSwitch(header, self.do_set_language)
+        self.flags.pack(side="right")
+
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True)
         valves_tab = ttk.Frame(self.nb, padding=PAD)
@@ -1140,6 +1160,8 @@ class App(ttk.Frame):
         m.add_cascade(label="Help", menu=h)
 
         self.master.config(menu=m)
+        if i18n.LANG != "en":
+            i18n.apply(self.master)
 
     def _build_valves_tab(self, root):
         """Build the Valves tab: boxes sidebar, search row, results table,
@@ -1182,8 +1204,10 @@ class App(ttk.Frame):
             e.bind("<Return>", lambda ev: self.run_search())
         ttk.Label(filt, text="Tested").grid(row=0, column=len(specs) * 2, sticky="e",
                                             padx=(PAD, 4))
-        tcb = ttk.Combobox(filt, textvariable=self.v_tested, values=TESTED_STATES,
-                           width=9, state="readonly")
+        tcb = ttk.Combobox(filt, textvariable=self.v_tested,
+                           values=[t(x) for x in TESTED_STATES],
+                           width=11, state="readonly")
+        self.v_tested_combo = tcb
         tcb.grid(row=0, column=len(specs) * 2 + 1, sticky="w")
         tcb.bind("<<ComboboxSelected>>", lambda ev: self.run_search())
         ttk.Label(filt, text="(numeric fields accept  >20  <7  >=250)",
@@ -1722,9 +1746,9 @@ class App(ttk.Frame):
         # nothing in it has been tested, which is what the question asks.
         tested_clause = ("EXISTS (SELECT 1 FROM valve v JOIN valve_test vt "
                          "ON vt.valve_id = v.id WHERE v.stock_id = s.id)")
-        if self.v_tested.get() == "tested":
+        if self.v_tested.get() == t("tested"):
             where.append(tested_clause)
-        elif self.v_tested.get() == "untested":
+        elif self.v_tested.get() == t("untested"):
             where.append("NOT " + tested_clause)
 
         sql = f"""SELECT {STOCK_SELECT}
@@ -1844,6 +1868,13 @@ class App(ttk.Frame):
     def on_box_select(self, _e):
         """Box list selection changed - rerun the search filtered to it."""
         self.run_search()
+
+        # Everything above was built in English. If Portuguese was chosen last
+        # session, relabel it now - see i18n.apply for why it works this way
+        # round rather than wrapping two hundred literals at their call sites.
+        if i18n.LANG != "en":
+            i18n.apply(self.master)
+        self.flags.highlight()
 
     def do_advanced_search(self):
         """Open the Advanced search dialog seeded with current quick and
@@ -2885,185 +2916,37 @@ class App(ttk.Frame):
         TextWindow(self.master, "Possible duplicate types", "\n".join(body))
 
     def do_help_guide(self):
-        """Help > User guide. Renders a long static walkthrough of the whole
-        tool (adding/editing/removing stock, searching, the Repair Bench tab,
-        filling in reference data via Claude, datasheets, backups, and
-        export) in a proportional-font TextWindow. Keep this in sync by hand
-        if workflow changes - it isn't generated from anything."""
-        body = "\n".join([
-            "VALVE INVENTORY - USER GUIDE", "",
-            "Two front ends sharing one database: this window, and valves.py on the command "
-            "line. Five tabs here - Valves, Bases / Sockets, Browse, Repair Bench, Docs.",
-            "",
-            "ADDING STOCK", "",
-            "  One at a time    \"Add stock\" (Valves tab) / \"Add\" (Bases-Sockets tab). "
-            "Creates the type automatically if it's new, classifying it from its designation.",
-            "  In bulk          Tools > Import upload CSV..., using the column layout from "
-            "Tools > Create upload template... (writes a blank CSV ready to fill in).",
-            "  From messy data  Tools > Generate CSV-building prompt... writes a prompt for "
-            "any Claude chat. It interviews you (or reads whatever spreadsheet, notes, or "
-            "photos you describe) and hands back a ready-to-import CSV.",
-            "",
-            "WHAT A LOT RECORDS", "",
-            "  A lot is one physical batch: this many of this type, in this box. Beyond the "
-            "quantity, maker and condition, each lot can record where it actually sits and "
-            "where it came from - all optional, fill in as much or as little as suits you:",
-            "    Position       where in the box, as a grid reference like B-12",
-            "    Type 1 / 2     other designations the valve is marked with (a US number, "
-            "a service code) - searchable, so it doesn't matter which one you look it up by",
-            "    Origin         bought, inherited, or the set it came out of",
-            "    Test values    what it measured on a tester",
-            "    Other          anything else: boxed or unboxed, odd printing",
-            "  Select a row and click \"Edit lot\" to fill these in or change them later; the "
-            "same fields are on the Add stock form and in the upload CSV. Note the two "
-            "editors do different jobs: Edit lot changes this one physical lot, while the "
-            "panel on the right changes the reference record shared by every lot of that "
-            "type. From the command line: valves.py edit <lot id> --position B-12 ... (lot "
-            "ids are the ID column of valves.py box / find / show).",
-            "",
-            "INDIVIDUAL VALVES AND TESTING", "",
-            "  A lot is a quantity - \"6 x KT66 in box 8\" - and for most of a collection "
-            "that is all it ever needs to be. Where it isn't, select the lot and click "
-            "\"Individual valves...\", then \"Track individually\": that creates one row per "
-            "valve held, and from then on each valve has its own position on the shelf, its "
-            "own serial or date code, its own maker and condition (for a mixed lot), and its "
-            "own test history. The Ind column on the results table shows how many of a lot "
-            "are tracked this way; blank means the lot is still just a quantity. New lots "
-            "added with \"Add stock\" are tracked individually from the start unless you say "
-            "otherwise on the form.",
-            "  \"Record test...\" logs one test of the selected valve. Every reading is "
-            "optional - no tester produces all of them - so a row holding a gm figure and a "
-            "date is a perfectly good record. What it can hold:",
-            "    Conditions     which tester, Va and Vg at test, fixed or auto bias. A gm "
-            "figure means nothing without them, and the same valve reads differently under "
-            "fixed and auto bias, so the tester and conditions are carried forward from the "
-            "valve's last test.",
-            "    Readings       anode current Ia (mA), screen current Ig2 (mA), mutual "
-            "conductance gm (mA/V - multiply by 1000 for the micromhos an American tester "
-            "shows), gm as a percentage of nominal, emission %.",
-            "    Fault tests    gas / grid current (uA), insulation (Mohm), heater-cathode "
-            "leakage, shorts, and an overall verdict.",
-            "  Testing is never destructive: each test is a new row, so retesting a valve "
-            "years later builds its history rather than replacing it. \"Test history...\" (or "
-            "double-clicking a valve) shows every test of it, newest first. A double triode "
-            "is recorded a section at a time - run Record test twice, once with Section a and "
-            "once with b, which is how the readings come off the meter and how they have to "
-            "be compared for matching. The list shows the most recent test of either section; "
-            "the history shows both.",
-            "  Amber rows in that list are valves never tested; red-brown are ones whose last "
-            "verdict was weak, short or failed.",
-            "  Take (on the Valves tab) removes individual rows along with the quantity, "
-            "least documented first - untested before tested, unmarked before serial-numbered "
-            "- so using valves up never quietly discards test history. \"Remove valve\" in the "
-            "dialog is the other thing: it corrects the record without touching the quantity. "
-            "Tools > Check individual valve counts reports any lot where the two have drifted "
-            "apart.",
-            "  From the command line: valves.py expand <lot id>, then lot / valve / test / "
-            "tests / check.",
-            "",
-            "REMOVING / MOVING STOCK", "",
-            "  Select a row, then Take (use up some of a lot), Move (to another box, "
-            "optionally giving its position there), or Delete lot (removes it - asks first). "
-            "Same from the command line: valves.py take/move TYPE ...",
-            "",
-            "SEARCHING & BROWSING", "",
-            "  Valves tab search row - text, function, base, and the numeric fields (accept "
-            "'>20', '<7', '>=250'). Text searches the lot's own fields as well as the "
-            "reference record, so \"the one out of the Bush\" or a number printed only on the "
-            "glass finds it without your having to remember which field you wrote it in. "
-            "Searching a type also pulls in anything cross-referenced "
-            "as its equivalent, shown in blue and labelled which type it's equivalent to. "
-            "Advanced... opens every remaining field, Position, Origin and Type 1 / Type 2 "
-            "among them.",
-            "  Browse tab - dropdown filters that cascade (Category, Base, Family, "
-            "Confidence, Variable-mu - picking one narrows what the others offer), plus "
-            "<, =, > on every numeric rating, and a live name filter as you type. "
-            "Double-click a type for its box breakdown, full reference data, and "
-            "datasheet/web-search shortcuts.",
-            "",
-            "REPAIR BENCH TAB", "",
-            "  For \"I've got this valve out of a set I'm fixing - what is it, and what have I "
-            "got that could stand in for it?\". Type the designation (and optionally which "
-            "circuit stage it came from), click Identify.",
-            "  If it's already in your database, its reference data loads straight in, \"In "
-            "stock now\" shows any you already hold of that exact type or a listed equivalent, "
-            "and \"Possible substitutes\" lists other held types with the same broad function "
-            "and every shared rating within 50% (heater mismatches are flagged, not hidden - a "
-            "dropping resistor often covers that). Double-click a substitute to switch to it.",
-            "  If it's new to you: Open datasheet / RadioMuseum / Web search work immediately "
-            "off the typed designation, and Copy research prompt puts a ready-to-paste, "
-            "single-type version of the research prompt (see below) on the clipboard. Add to "
-            "database creates a bare reference record (no stock) so you've somewhere to save "
-            "what you find; Save / Save + confirm work exactly as in the Valves tab detail "
-            "panel, and refresh the substitute list immediately using the parameters you just "
-            "entered.",
-            "",
-            "FILLING IN REFERENCE DATA", "",
-            "  Parameters start out inferred from the type's naming convention, not read from "
-            "a datasheet - unconfirmed rows show amber in the Valves tab.",
-            "  By hand    Edit the fields in the detail panel, then Save + confirm.",
-            "  With Claude:",
-            "    Tools > Generate research prompt...             electrical parameters",
-            "    Tools > Generate datasheet download prompt...   PDFs into the local archive",
-            "  Paste either into Claude - the research prompt works in any chat; the download "
-            "one needs an agent with file/web access (Claude Code), since it writes files to "
-            "disk. Save the reply to a text file, then Tools > Apply researched data... (or "
-            "'import_researched.py <file> --yes' from the command line). Only what Claude "
-            "actually confirmed gets applied - a hedged finding ('could not verify', "
-            "'plausible') stays flagged as a lead, not marked confirmed.",
-            "",
-            "DATASHEETS", "",
-            "  Double-click a row, or \"Open datasheet\", opens the local PDF if there is one, "
-            "otherwise falls back to a web lookup (RadioMuseum / Web search do the same, "
-            "scoped to that site). The button itself says which it'll do - \"Open datasheet "
-            "(local)\" or \"Find datasheet (web)\" - before you click it. Tools > Scan "
-            "datasheet archive links newly-added PDF files in by filename. "
-            "fetch_datasheets.py builds the archive itself from frank.pocnet.net (see README) "
-            "- it's gitignored and not included when you export, so rebuild it locally or use "
-            "the download prompt above.",
-            "  Manage... (Manage information... on the Browse tab's popup, next to Open "
-            "datasheet) opens the full list for a type: the one \"primary\" sheet that button "
-            "opens, plus as many extra datasheets and links as you want - a second "
-            "manufacturer's sheet, a forum thread, a project that happens to use this valve. "
-            "Upload a file you already have, or paste a URL - no download needed for a link, "
-            "it's just recorded. Its Edit parameters... button opens the same field-entry form "
-            "as the detail panel, so a Browse-tab research session never needs to switch tabs "
-            "to record what a datasheet says.",
-            "  The Docs tab holds the same idea for material that isn't about one specific "
-            "type - a care-and-feeding guide, a base wiring reference. Add from file / Add "
-            "from URL, a title and an optional abstract, and a filter box to find things again.",
-            "",
-            "BACKUP & VERSION CONTROL", "",
-            "  valves.db is the live database - gitignored, since it's binary and can't be "
-            "diffed. snapshot.py writes data/*.csv and valves.sql, a text snapshot that IS "
-            "meant to be committed - that's the real backup and history. After cloning or "
-            "restoring elsewhere: 'snapshot.py --restore' rebuilds valves.db from data/.",
-            "",
-            "EXPORT & GIVING THIS TO SOMEONE ELSE", "",
-            "  File > Export spreadsheet...  a plain .xlsx for anyone who just wants to look, "
-            "not use the tool.",
-            "  File > Export archive and tools (.zip)...  the whole toolkit (code, docs, a "
-            "fresh data/ snapshot) zipped up, with an option to strip the third-party "
-            "descriptive notes text first. See QUICKSTART.md, included in the zip:",
-            "    1. Unzip, run 'python3 snapshot.py --restore', then 'python3 valves_gui.py'.",
-            "    2. Datasheets aren't included - rebuild with fetch_datasheets.py, or Tools > "
-            "Generate datasheet download prompt... with Claude.",
-            "    3. Add their own stock the same ways described above.",
-            "",
-            "Everything here also works from the command line - see README.md for the full "
-            "command reference.",
-        ])
-        TextWindow(self.master, "User guide", body, wrap="word", proportional=True)
+        """Help > User guide. Shows the walkthrough from guide.py in whichever
+        language the interface is set to - see there for the text itself, and
+        for the note about keeping the two versions in step."""
+        TextWindow(self.master, t("User guide"), guide.text(i18n.LANG),
+                   wrap="word", proportional=True)
 
     def do_about(self):
         """Help > About. Static version/summary dialog box."""
+        q = lambda sql: self.con.execute(sql).fetchone()[0]
+        counts = (q("SELECT COALESCE(SUM(qty),0) FROM stock"),
+                  q("SELECT COUNT(*) FROM valve_type"),
+                  q("SELECT COUNT(*) FROM box"),
+                  q("SELECT COUNT(*) FROM valve_test"))
         messagebox.showinfo(
-            "About",
-            "Valve inventory\n\n"
-            "A SQLite database and desktop/CLI tool for cataloguing a vacuum-tube collection - "
-            "1,441 valves, 253 types, 36 boxes and counting.\n\n"
-            "See README.md for the full picture, or Help > User guide for a task-by-task "
-            "walkthrough.")
+            t("About"),
+            tn("Valve inventory", "Inventário de válvulas") + "\n\n"
+            + tn("A SQLite database and desktop/CLI tool for cataloguing a "
+                 "vacuum-tube collection - %d valves, %d types, %d boxes, %d "
+                 "tests recorded.",
+                 "Uma base de dados SQLite e uma ferramenta gráfica e de linha de "
+                 "comandos para catalogar uma colecção de válvulas - %d válvulas, "
+                 "%d tipos, %d caixas, %d ensaios registados.") % counts
+            + "\n\n"
+            + tn("Speaks English and Portuguese - use the flags at the top right.",
+                 "Fala inglês e português - use as bandeiras no canto superior "
+                 "direito.")
+            + "\n\n"
+            + tn("See README.md for the full picture, or Help > User guide for a "
+                 "task-by-task walkthrough.",
+                 "Ver o README.md para o quadro completo, ou Ajuda > Guia do "
+                 "utilizador para um percurso tarefa a tarefa."))
 
     def do_open_manual(self, filename):
         """Help menu handler for one of the three PDF manuals shipped in
@@ -3494,6 +3377,27 @@ class App(ttk.Frame):
         self.boxlist.selection_set("__all__")
         self.run_search()
 
+    def do_set_language(self, lang):
+        """Flag clicked: relabel the interface, and say so in the status bar.
+
+        Nothing is rebuilt and nothing is re-queried - the filters, the
+        selected box and any open dialog all stay exactly as they were, only
+        their labels change. The choice is remembered for next time.
+        """
+        i18n.set_language(lang, self.master)
+        self.flags.highlight()
+        # The tested pickers hold one of the app's own words, so their current
+        # value and their option list are both in the language we just left.
+        self.v_tested_combo.configure(values=[t(x) for x in TESTED_STATES])
+        self.v_tested.set("")
+        self.pb_cat_vars["tested_state"].set("")
+        self.run_search()
+        self.pb_run_search()
+        # Column headings are relabelled in place by apply(); the rows under
+        # them are database content and are deliberately left alone.
+        self.set_status(tn("Interface language: English",
+                           "Idioma da interface: Portugues"))
+
     def set_status(self, msg):
         """Writes msg to the status bar at the foot of the main window."""
         self.status.config(text=msg)
@@ -3668,7 +3572,7 @@ class App(ttk.Frame):
         for r in rows:
             r["category"] = browse_category(r.get("function"))
             r["variable_mu"] = "yes" if is_variable_mu(r) else "no"
-            r["tested_state"] = "tested" if r.get("tested") else "untested"
+            r["tested_state"] = t("tested") if r.get("tested") else t("untested")
         return rows
 
     def pb_matches(self, r, exclude=None):
@@ -3952,6 +3856,8 @@ def main():
     p.add_argument("--db", default=V.DB_DEFAULT)
     p.add_argument("--archive", default=V.ARCHIVE_DEFAULT)
     a = p.parse_args()
+
+    i18n.load_language()
 
     root = tk.Tk()
     root.withdraw()  # stay hidden until setup below is done, to avoid a flash of an empty window
