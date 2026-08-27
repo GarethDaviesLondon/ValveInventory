@@ -54,6 +54,7 @@ STOCK_COLS = [
     ("box", "Box", 50), ("position", "Pos", 52),
     ("type", "Type", 100), ("type1", "Type 1", 70), ("type2", "Type 2", 70),
     ("match", "Match", 90), ("qty", "Qty", 42), ("individuals", "Ind", 40),
+    ("tested", "Tstd", 44),
     ("manufacturer", "Maker", 88), ("condition", "Condition", 92),
     ("origin", "Origin", 120),
     ("base", "Base", 64), ("function", "Function", 190), ("heater_v", "Htr V", 48),
@@ -101,6 +102,9 @@ STOCK_SELECT = """s.id, s.box, s.position, COALESCE(t.name, s.type_key) AS type,
                   s.type_key, s.type1, s.type2, s.qty, s.manufacturer, s.condition,
                   s.origin, s.test_values, s.other, s.notes,
                   (SELECT COUNT(*) FROM valve v WHERE v.stock_id = s.id) AS individuals,
+                  (SELECT COUNT(DISTINCT vt.valve_id) FROM valve v
+                     JOIN valve_test vt ON vt.valve_id = v.id
+                    WHERE v.stock_id = s.id) AS tested,
                   t.base,
                   t.function, t.heater_v, t.heater_a, t.pa_max,
                   t.datasheet_path, t.confidence"""
@@ -121,7 +125,14 @@ SOCKET_COLS = [
 # which makes it useless as a browse facet. These are derived, coarser
 # buckets computed per row instead - see browse_category()/is_variable_mu().
 PB_CAT_FIELDS = [("category", "Category"), ("base", "Base"), ("family", "Family"),
-                  ("confidence", "Confidence"), ("variable_mu", "Variable-mu")]
+                  ("confidence", "Confidence"), ("variable_mu", "Variable-mu"),
+                  ("tested_state", "Tested")]
+
+# What the tested/untested filter means, in one place so the Valves tab and
+# the Browse tab agree: a lot or a type counts as tested when at least one
+# valve in it has at least one valve_test row. Anything with no individual
+# valve rows at all can never be tested, and so reads as untested.
+TESTED_STATES = ("", "tested", "untested")
 PB_NUM_FIELDS = [("heater_v", "Heater V"), ("heater_a", "Heater A"), ("va_max", "Va max"),
                   ("pa_max", "Pa max"), ("gm", "gm"), ("mu", "mu"),
                   ("power_out", "Power out"), ("freq_max", "Freq max")]
@@ -131,7 +142,7 @@ BROWSE_COLS = [
     ("name", "Type", 90), ("category", "Category", 110), ("function", "Function", 170),
     ("base", "Base", 90), ("heater_v", "Htr V", 48), ("heater_a", "Htr A", 48),
     ("va_max", "Va", 55), ("pa_max", "Pa", 50), ("power_out", "P.out", 55),
-    ("freq_max", "Freq", 55), ("qty", "Qty held", 60),
+    ("freq_max", "Freq", 55), ("qty", "Qty held", 60), ("tested", "Tested", 55),
 ]
 
 # Checked in order - compound/combination types must come before the plain
@@ -425,14 +436,33 @@ class TypeDetailWindow(tk.Toplevel):
         tree.pack(side="left", fill="both", expand=True)
         vs.pack(side="left", fill="y")
         for r in box_rows:
-            tree.insert("", "end", values=(r["box"], r["position"] or "", r["qty"],
-                                           r["manufacturer"] or "", r["condition"] or "",
-                                           r["origin"] or ""))
+            # iid is the stock id, so a double-click can open that exact lot
+            tree.insert("", "end", iid=str(r["id"]),
+                        values=(r["box"], r["position"] or "", r["qty"],
+                                r["manufacturer"] or "", r["condition"] or "",
+                                r["origin"] or ""))
+        self.box_tree = tree
+        tree.bind("<Double-1>", self._open_lot)
+        ttk.Label(self, text="Double-click a row to see the individual valves in that lot",
+                  foreground="#666").pack(anchor="w", padx=PAD, pady=(0, PAD))
 
         self._render(t)
         self.bind("<Escape>", lambda e: self.destroy())
         self.update_idletasks()
         self.geometry(f"+{app.master.winfo_rootx() + 100}+{app.master.winfo_rooty() + 80}")
+
+    def _open_lot(self, _event=None):
+        """Open the individual-valves view for the double-clicked lot.
+
+        The box breakdown answers "where are they"; this is the step down to
+        "which one, and what did it measure" - the same LotValvesDialog the
+        Valves tab reaches through its Individual valves... button, so a lot
+        found by browsing behaves exactly like one found by searching.
+        """
+        sel = self.box_tree.selection()
+        if not sel:
+            return
+        LotValvesDialog(self.app, int(sel[0]), on_change=self.app.run_search)
 
     def _render(self, t):
         """(Re)fill the title, confidence, Open-datasheet label, and info
@@ -494,6 +524,10 @@ VALVE_COLS = [
     ("tests", "Tests", 44), ("last_tested", "Last test", 84),
     ("last_gm", "gm mA/V", 62), ("last_gm_pct", "% nom", 50),
     ("last_ia", "Ia mA", 55), ("last_verdict", "Verdict", 70),
+    # what the owner wrote about this one valve - a serial off the glass, "s/Cx",
+    # "Outra em CASA". Last because it is the widest and the least tabular, but
+    # present, because a note nobody can see is a note nobody kept.
+    ("notes", "Notes", 240),
 ]
 
 
@@ -1136,6 +1170,7 @@ class App(ttk.Frame):
         self.v_heater = tk.StringVar()
         self.v_pa = tk.StringVar()
         self.v_freq = tk.StringVar()
+        self.v_tested = tk.StringVar()
 
         specs = [("Text", self.v_text, 20), ("Function", self.v_function, 18),
                  ("Base", self.v_base, 12), ("Heater V", self.v_heater, 8),
@@ -1145,6 +1180,12 @@ class App(ttk.Frame):
             e = ttk.Entry(filt, textvariable=var, width=w)
             e.grid(row=0, column=i * 2 + 1, sticky="w")
             e.bind("<Return>", lambda ev: self.run_search())
+        ttk.Label(filt, text="Tested").grid(row=0, column=len(specs) * 2, sticky="e",
+                                            padx=(PAD, 4))
+        tcb = ttk.Combobox(filt, textvariable=self.v_tested, values=TESTED_STATES,
+                           width=9, state="readonly")
+        tcb.grid(row=0, column=len(specs) * 2 + 1, sticky="w")
+        tcb.bind("<<ComboboxSelected>>", lambda ev: self.run_search())
         ttk.Label(filt, text="(numeric fields accept  >20  <7  >=250)",
                   foreground="#666").grid(row=1, column=0, columnspan=8, sticky="w", pady=(6, 0))
         btns = ttk.Frame(filt)
@@ -1677,6 +1718,14 @@ class App(ttk.Frame):
             where.append("t.datasheet_path IS NOT NULL")
         elif self.adv.get("has_sheet") == "no":
             where.append("t.datasheet_path IS NULL")
+        # "untested" deliberately includes a lot with no individual valve rows:
+        # nothing in it has been tested, which is what the question asks.
+        tested_clause = ("EXISTS (SELECT 1 FROM valve v JOIN valve_test vt "
+                         "ON vt.valve_id = v.id WHERE v.stock_id = s.id)")
+        if self.v_tested.get() == "tested":
+            where.append(tested_clause)
+        elif self.v_tested.get() == "untested":
+            where.append("NOT " + tested_clause)
 
         sql = f"""SELECT {STOCK_SELECT}
                   FROM stock s LEFT JOIN valve_type t ON s.type_key = t.type_key
@@ -3439,7 +3488,7 @@ class App(ttk.Frame):
         heater, power, frequency, and the advanced-filter dict) and the box
         list back to 'all', then reruns the search."""
         for v in (self.v_text, self.v_function, self.v_base,
-                  self.v_heater, self.v_pa, self.v_freq):
+                  self.v_heater, self.v_pa, self.v_freq, self.v_tested):
             v.set("")
         self.adv = {}
         self.boxlist.selection_set("__all__")
@@ -3609,12 +3658,17 @@ class App(ttk.Frame):
         """category/variable_mu aren't real columns, so filtering happens in
         Python over the whole (small, ~250-row) type list rather than SQL."""
         rows = [dict(r) for r in self.con.execute("""
-            SELECT t.*, COALESCE(SUM(s.qty),0) qty
+            SELECT t.*, COALESCE(SUM(s.qty),0) qty,
+                   (SELECT COUNT(DISTINCT vt.valve_id)
+                      FROM stock s2 JOIN valve v ON v.stock_id = s2.id
+                      JOIN valve_test vt ON vt.valve_id = v.id
+                     WHERE s2.type_key = t.type_key) AS tested
             FROM valve_type t LEFT JOIN stock s ON s.type_key = t.type_key
             GROUP BY t.type_key""")]
         for r in rows:
             r["category"] = browse_category(r.get("function"))
             r["variable_mu"] = "yes" if is_variable_mu(r) else "no"
+            r["tested_state"] = "tested" if r.get("tested") else "untested"
         return rows
 
     def pb_matches(self, r, exclude=None):
@@ -3721,7 +3775,7 @@ class App(ttk.Frame):
         if not t:
             return
         rows = [dict(r) for r in self.con.execute(
-            "SELECT box, position, qty, manufacturer, condition, origin FROM stock "
+            "SELECT id, box, position, qty, manufacturer, condition, origin FROM stock "
             "WHERE type_key=? ORDER BY CAST(box AS INTEGER), box, position", (key,))]
         TypeDetailWindow(self, dict(t), rows)
 
