@@ -28,6 +28,7 @@ confidence='inferred' either way, since a stock list is not a datasheet.
   python3 import_rmorg.py book.xlsx out.db             # explicit paths
   python3 import_rmorg.py --append valves.db           # into an existing DB
   python3 import_rmorg.py --no-group                   # one lot per sheet row
+  python3 import_rmorg.py --notes-only valves.db       # per-valve notes + tests
 
 Writing a fresh database deletes any file already at that path, so the
 default output is valves_rmorg.db rather than valves.db - importing does not
@@ -286,8 +287,159 @@ def prepare(rows, unknown_box):
             "origin": r["origin"] or None,
             "other": r["obs"] or None,
             "notes": r["notes"] or None,
+            # the three free-text columns kept verbatim: the per-valve note and
+            # the test parser both read them, and neither wants them already
+            # sorted into lot columns
+            "_state": state,
+            "_obs": r["obs"],
+            "_notas": r["notes"],
         })
     return prepared, sundries
+
+
+# --------------------------------------------------------------------------
+# Per-valve free text, and the tests hidden in it
+# --------------------------------------------------------------------------
+
+# ESTADO holds a verdict as often as a condition, and Obs./Notas carry a few
+# more. Longest key first so "MUITO FRACA" beats "FRACA" and "FILAMENTO OFF"
+# is not read as a bare "OFF".
+VERDICTS = [
+    ("MUITO FRACA",     "very weak"),
+    ("FILAMENTO OFF",   "heater open"),
+    ("OFF FILAMENTO",   "heater open"),
+    ("OFF QUANDO QUENTE", "fails when hot"),
+    ("MAUS CONTAC",     "bad contacts"),
+    ("TESTADO OK",      "good"),
+    ("TESTADA OK",      "good"),
+    ("TRIODO FRACO",    "triode section weak"),
+    ("FUGA DE S",       "leakage when cold"),
+    ("AVARIADA",        "failed"),
+    ("RUIDOSA",         "noisy"),
+    ("REPARADA",        "repaired"),
+    ("VAL OFF",         "heater open"),
+    ("FRACA",           "weak"),
+    ("FRACO",           "weak"),
+    ("OK",              "good"),
+]
+
+# Rows whose free text carries readings worth typed columns. Declared per
+# sheet row rather than parsed, because the same "a/b" shape means two
+# different things: on a 43, a 25A6 or a 1625 - all single-section valves -
+# "2.4/2.35 ... 15/18Vg" is one valve measured at two grid biases, so it
+# becomes two test rows with different vg and no section; on the ELL80, a
+# genuine double output pentode, "25/29mA" really is the two sections. A
+# parser that guessed would get one of those wrong, and these figures are the
+# sort a rebuild gets designed around.
+#
+# Each entry is a list of test dicts. Grid bias is written negative: the sheet
+# omits the sign, but a control grid in normal service is negative, and a
+# positive figure in this column would read as a fault.
+EXPLICIT_TESTS = {
+    216:  [{"gm": 5.0, "notes": "sheet reads '5 mho'; taken as 5 mA/V"}],
+    229:  [{"gm": 12.0}],
+    433:  [{"tester": "TV2", "gm_pct": 100}],
+    438:  [{"tester": "AVO CT160", "verdict": "good", "gm": 2.4, "vg": -15.0, "ia": 33.0},
+           {"tester": "AVO CT160", "verdict": "good", "gm": 2.35, "vg": -18.0}],
+    572:  [{"gm_pct": 40, "notes": "sheet reads '40%-45%'; low end of the stated range"}],
+    845:  [{"tester": "TV2", "gm_pct": 120,
+            "notes": "sheet reads '120-135% - TV2'; low end of the stated range"}],
+    846:  [{"tester": "TV2", "gm_pct": 130}],
+    891:  [{"tester": "TV2", "notes": "sheet reads 'teste noTV2/U, shunte a 10 %a 70'"}],
+    924:  [{"tester": "AVO CT160", "verdict": "good", "gm": 6.8, "vg": -15.0, "ia": 83.0},
+           {"tester": "AVO CT160", "verdict": "good", "gm": 6.5, "vg": -18.0}],
+    998:  [{"tester": "AVO CT160", "verdict": "good", "gm": 2.0, "ia": 33.0},
+           {"tester": "AVO CT160", "verdict": "good", "gm": 2.35, "ia": 33.0}],
+    1422: [{"tester": "AVO CT160", "verdict": "good", "va": 250.0, "vg": -5.8,
+            "gm": 6.9, "ia": 25.0,
+            "notes": "second section read 29 mA; screen at 200 V"}],
+}
+
+# Free text that states a condition or a packing detail rather than a test.
+# Matched whole (uppercased) so "NOS" does not suppress "NOS, OK CT160".
+NOT_A_TEST = {"NOS", "USADA", "USADAS", "USADOS", "S/CX", "SNO1918",
+              "SCREEN-GRID TETRODE", "STROBE TUBE", "CX EM LATA AL-"}
+
+_GM_RE = re.compile(r"(\d+[.,]?\d*)\s*mA/V", re.I)
+_PCT_RE = re.compile(r"(\d+)\s*%")
+
+
+def valve_note(r):
+    """Compose one individual valve's note from the sheet's free-text columns.
+
+    Obs. and Notas are what the owner wrote about THIS valve - "s/Cx"
+    (no box), "c/ top" (with top cap), "Outra em CASA" (another one at
+    home) - so they belong on the valve rather than pooled onto the lot.
+    Each is labelled with the column it came from, because "Cx original"
+    under Obs. and "FOTO" under Notas are different kinds of remark and the
+    distinction is lost once they are run together.
+
+    Returns None when the row said nothing.
+    """
+    bits = []
+    if r.get("_obs"):
+        bits.append(f"Obs: {r['_obs']}")
+    if r.get("_notas"):
+        bits.append(f"Notas: {r['_notas']}")
+    return " | ".join(bits) or None
+
+
+def parse_tests(r):
+    """Return a list of valve_test field dicts for one sheet row.
+
+    An explicit entry in EXPLICIT_TESTS wins outright. Otherwise the three
+    free-text columns are read for a tester name, a verdict and any bare
+    reading, and a test is emitted only if at least one of those turned up -
+    "NOS" on its own is a statement of condition, not a measurement.
+
+    tested_on is deliberately left unset: the sheet records no test dates, and
+    stamping today's date would assert that every one of these was measured on
+    the day of the import. The source text travels in notes either way, so
+    nothing here has to be taken on trust.
+    """
+    tests = [dict(t) for t in EXPLICIT_TESTS.get(r["_row"], [])]
+    raw = " | ".join(x for x in (r.get("_state"), r.get("_obs"), r.get("_notas")) if x)
+    if not tests:
+        up = raw.upper()
+        if up.strip() in NOT_A_TEST:
+            return []
+        t = {}
+        if "CT160" in up.replace(" ", ""):
+            t["tester"] = "AVO CT160"
+        elif "TV2" in up:
+            t["tester"] = "TV2"
+        elif re.search(r"\bTV\b", up):
+            t["tester"] = "TV"
+        for needle, verdict in VERDICTS:
+            if needle in up:
+                t["verdict"] = verdict
+                break
+        m = _GM_RE.search(raw)
+        if m:
+            t["gm"] = float(m.group(1).replace(",", "."))
+        m = _PCT_RE.search(raw)
+        if m:
+            t["gm_pct"] = float(m.group(1))
+        if not t:
+            return []
+        tests = [t]
+    for t in tests:
+        note = t.get("notes")
+        t["notes"] = f"from RMORG sheet row {r['_row']}: {raw}" + (f" ({note})" if note else "")
+    return tests
+
+
+TEST_COLS = ("tester", "section", "va", "vg", "bias_mode", "ia", "ig2", "gm",
+             "gm_pct", "emission_pct", "gas_ua", "insulation_mohm",
+             "heater_cathode", "shorts", "verdict", "notes")
+
+
+def insert_test(con, valve_id, t):
+    """Insert one valve_test row, leaving tested_on NULL (see parse_tests)."""
+    cols = [c for c in TEST_COLS if t.get(c) is not None]
+    con.execute(
+        f"INSERT INTO valve_test (valve_id,{','.join(cols)}) "
+        f"VALUES (?{',?' * len(cols)})", [valve_id] + [t[c] for c in cols])
 
 
 def group_lots(prepared, group):
@@ -337,7 +489,7 @@ def write(con, lots, sundries, types, box_location):
     """
     today = datetime.date.today().isoformat()
     counts = {"types_new": 0, "types_filled": 0, "lots": 0, "valves": 0,
-              "sundries": 0, "boxes": 0}
+              "sundries": 0, "boxes": 0, "tests": 0}
 
     for lot in lots:
         key = V.norm(lot["type"]) or UNIDENTIFIED
@@ -381,10 +533,14 @@ def write(con, lots, sundries, types, box_location):
                     (lot["box"], box_location))
 
         for r in lot["rows"]:
+            note = valve_note(r)
+            tests = parse_tests(r)
             for n in range(1, r["qty"] + 1):
-                # only record per-valve values that differ from the lot's, so
-                # a valve row says something when it is read on its own
-                con.execute(
+                # position/maker/condition are only worth repeating on the valve
+                # when they differ from the lot's; the note is not, because it is
+                # what the owner wrote about THIS valve and reads as nothing
+                # once it is pooled onto the lot with its neighbours'
+                cur = con.execute(
                     """INSERT INTO valve (stock_id,position,serial,manufacturer,
                                           condition,notes,added)
                        VALUES (?,?,?,?,?,?,?)""",
@@ -393,9 +549,11 @@ def write(con, lots, sundries, types, box_location):
                      serial_for(r["order"], n, r["qty"]),
                      r["maker"] if r["maker"] != lot["maker"] else None,
                      r["condition"] if r["condition"] != lot["condition"] else None,
-                     r["notes"] if r["notes"] != lot["notes"] else None,
-                     today))
+                     note, today))
                 counts["valves"] += 1
+                for t in tests:
+                    insert_test(con, cur.lastrowid, t)
+                    counts["tests"] += 1
 
     for s in sundries:
         con.execute("INSERT INTO sundry (box, description, qty, notes) VALUES (?,?,1,?)",
@@ -406,6 +564,73 @@ def write(con, lots, sundries, types, box_location):
 
     con.commit()
     return counts
+
+
+def apply_notes(con, lots, dry_run):
+    """Add the per-valve notes and tests to a database that already holds them.
+
+    For a database this script built, the mapping back from sheet row to valve
+    row is exact rather than guessed: lots were inserted in the order
+    group_lots returns them and valves in the order each lot lists its rows,
+    both into empty AUTOINCREMENT tables, so lot i is stock id i and the valve
+    rows follow in the same sequence. Every match is checked against the
+    stored serial before anything is written, and a single disagreement aborts
+    the whole run - a mismatch would mean this is not the database that sheet
+    built, and writing notes onto the wrong valves is far worse than doing
+    nothing.
+
+    Existing note text is kept: the sheet's note is prepended to it, and a
+    valve already carrying it is left alone, so a second run changes nothing.
+    Tests are only added to valves that have none, for the same reason.
+    valve_type is never touched - the reference data researched into it stands.
+    """
+    pairs, vid = [], 0
+    for i, lot in enumerate(lots, start=1):
+        for r in lot["rows"]:
+            for n in range(1, r["qty"] + 1):
+                vid += 1
+                pairs.append((vid, i, r, serial_for(r["order"], n, r["qty"])))
+
+    have = {row["id"]: row for row in
+            con.execute("SELECT id, stock_id, serial, notes FROM valve")}
+    if len(have) != len(pairs):
+        raise SystemExit(
+            "database holds %d valves, the sheet makes %d - not the database "
+            "this sheet built, refusing to touch it" % (len(have), len(pairs)))
+
+    bad = [(vid, serial, have.get(vid))
+           for vid, stock_id, _r, serial in pairs
+           if vid not in have or have[vid]["stock_id"] != stock_id
+           or have[vid]["serial"] != serial]
+    if bad:
+        print("  %d valve row(s) do not line up with the sheet, e.g.:" % len(bad))
+        for vid, want, got in bad[:5]:
+            print("    valve %s: sheet says serial %r, database has %r"
+                  % (vid, want, got["serial"] if got else None))
+        raise SystemExit("refusing to write notes onto valves that may be the wrong ones")
+
+    noted = tested = skipped = 0
+    for vid, _stock_id, r, _serial in pairs:
+        note = valve_note(r)
+        if note:
+            old = have[vid]["notes"]
+            if old and note in old:
+                skipped += 1
+            else:
+                if not dry_run:
+                    con.execute("UPDATE valve SET notes=? WHERE id=?",
+                                (note if not old else note + " | " + old, vid))
+                noted += 1
+        tests = parse_tests(r)
+        if tests and not con.execute(
+                "SELECT 1 FROM valve_test WHERE valve_id=?", (vid,)).fetchone():
+            for t in tests:
+                if not dry_run:
+                    insert_test(con, vid, t)
+                tested += 1
+    if not dry_run:
+        con.commit()
+    return noted, tested, skipped
 
 
 def main():
@@ -421,6 +646,9 @@ def main():
                     help="box name for rows with no location (default: unsorted)")
     ap.add_argument("--box-location", default=None,
                     help="location to record for boxes this import creates")
+    ap.add_argument("--notes-only", action="store_true",
+                    help="add per-valve notes and tests to an existing database, "
+                         "leaving everything else (valve_type especially) alone")
     ap.add_argument("--dry-run", action="store_true",
                     help="report what would be imported and write nothing")
     a = ap.parse_args()
@@ -441,6 +669,22 @@ def main():
         print(f"  {len(skipped)} row(s) skipped:")
         for ridx, why in skipped:
             print(f"    row {ridx}: {why}")
+    if a.notes_only:
+        if not os.path.exists(a.db):
+            sys.exit("no such database: " + a.db)
+        con = V.connect(a.db)
+        noted, tested, skipped = apply_notes(con, lots, a.dry_run)
+        con.close()
+        verb = "would add" if a.dry_run else "added"
+        print("")
+        print("%s notes to %d valve(s) and %d test result(s) in %s"
+              % (verb, noted, tested, a.db))
+        if skipped:
+            print("  %d valve(s) already carried their note - left alone" % skipped)
+        if a.dry_run:
+            print("  --dry-run: nothing written")
+        return
+
     if a.dry_run:
         print("\n  --dry-run: nothing written")
         return

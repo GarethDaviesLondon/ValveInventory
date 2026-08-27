@@ -501,7 +501,9 @@ def print_tests(con, valve_id):
     table(rows, shown(rows, cols, always={"tested_on", "gm", "ia", "verdict"}))
     for r in rows:
         if r["notes"]:
-            print(f"    {r['tested_on']}: {r['notes']}")
+            # tested_on is nullable - a test recovered from a written record
+            # often has no date - so don't print a bare "None:" in front of it
+            print(f"    {r['tested_on'] or 'undated'}: {r['notes']}")
     print()
 
 

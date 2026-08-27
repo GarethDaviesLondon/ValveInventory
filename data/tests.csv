@@ -1,1 +1,73 @@
 id,valve_id,tested_on,tester,section,va,vg,bias_mode,ia,ig2,gm,gm_pct,emission_pct,gas_ua,insulation_mohm,heater_cathode,shorts,verdict,notes
+73,37,,AVO CT160,,,,,,,,,,,,,,,from RMORG sheet row 38: CT160
+74,218,,,,,,,,,5.0,,,,,,,,from RMORG sheet row 216: 5 mho (sheet reads '5 mho'; taken as 5 mA/V)
+75,232,,,,,,,,,12.0,,,,,,,,from RMORG sheet row 229: 12mA/V | Power/Output 6BGA080
+76,238,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output
+77,239,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 235: NOS | OK CT160 ambas | Audio Power/Output
+78,410,,,,,,,,,,,,,,,,good,from RMORG sheet row 425: OK
+79,411,,,,,,,,,,,,,,,,good,from RMORG sheet row 426: OK
+80,433,,TV2,,,,,,,,100.0,,,,,,,from RMORG sheet row 433: 100% TV2
+81,434,,,,,,,,,,,,,,,,bad contacts,from RMORG sheet row 434: MAUS CONTAC. | REPARADA
+82,438,,AVO CT160,,,-15.0,,33.0,,2.4,,,,,,,good,from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg
+83,438,,AVO CT160,,,-18.0,,,,2.35,,,,,,,good,from RMORG sheet row 438: OK CT160 | 2.4/2.35 33mA 15/18Vg
+84,439,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 439: OK CT160
+85,440,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 440: OK CT160
+86,475,,,,,,,,,,,,,,,,failed,from RMORG sheet row 471: testada veio da Cx 23 com avariada
+87,481,,,,,,,,,,,,,,,,good,from RMORG sheet row 477: TESTADO OK
+88,482,,,,,,,,,,,,,,,,good,from RMORG sheet row 478: TESTADO OK
+89,483,,,,,,,,,,,,,,,,good,from RMORG sheet row 479: TESTADO OK
+90,532,,TV,,,,,,,,,,,,,,,from RMORG sheet row 528: tv
+91,533,,TV,,,,,,,,,,,,,,,from RMORG sheet row 529: tv
+92,534,,TV,,,,,,,,,,,,,,,from RMORG sheet row 530: tv
+93,537,,TV,,,,,,,,,,,,,,,from RMORG sheet row 533: tv
+94,545,,TV,,,,,,,,,,,,,,,from RMORG sheet row 541: tv
+95,576,,,,,,,,,,40.0,,,,,,,from RMORG sheet row 572: 40%-45% | 10 (sheet reads '40%-45%'; low end of the stated range)
+96,586,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 582: FILAMENTO OFF
+97,587,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 583: FILAMENTO OFF
+98,588,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 584: FILAMENTO OFF
+99,649,,TV,,,,,,,,,,,,,,,from RMORG sheet row 645: tv
+100,655,,TV,,,,,,,,,,,,,,,from RMORG sheet row 651: tv
+101,656,,TV,,,,,,,,,,,,,,,from RMORG sheet row 652: tv
+102,677,,TV,,,,,,,,,,,,,,,from RMORG sheet row 673: tv
+103,742,,TV,,,,,,,,,,,,,,,from RMORG sheet row 738: tv
+104,766,,,,,,,,,,,,,,,,triode section weak,from RMORG sheet row 762: cc/Cx - triodo fraco
+105,841,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 837: Val OFF
+106,842,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 838: Val OFF
+107,843,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 839: Val OFF
+108,844,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 840: Val OFF
+109,845,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 841: Val OFF
+110,846,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 842: Val OFF
+111,849,,TV2,,,,,,,,120.0,,,,,,,from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads '120-135% - TV2'; low end of the stated range)
+112,850,,TV2,,,,,,,,120.0,,,,,,,from RMORG sheet row 845: 120-135% - TV2 | Radio RCA 262 Fiesta | Radio RCA 262 Fiesta (sheet reads '120-135% - TV2'; low end of the stated range)
+113,851,,TV2,,,,,,,,130.0,,,,,,,from RMORG sheet row 846: 130% - TV2 | Radio RCA 262 Fiesta
+114,896,,TV2,,,,,,,,,,,,,,,"from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads 'teste noTV2/U, shunte a 10 %a 70')"
+115,897,,TV2,,,,,,,,,,,,,,,"from RMORG sheet row 891: teste noTV2/U, shunte a 10 %a 70 (sheet reads 'teste noTV2/U, shunte a 10 %a 70')"
+116,905,,,,,,,,,,,,,,,,noisy,from RMORG sheet row 899: Ruidosa??
+117,930,,AVO CT160,,,-15.0,,83.0,,6.8,,,,,,,good,"from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA"
+118,930,,AVO CT160,,,-18.0,,,,6.5,,,,,,,good,"from RMORG sheet row 924: OKCT160 | 6,8/6,5 15/18VG 83mA"
+119,938,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 932: OK CT160 | A SEGUNDA RCA s/ID | 10 Outra em CASA
+120,983,,,,,,,,,,,,,,,,very weak,from RMORG sheet row 977: MUITO FRACA DO PH BX253U
+121,995,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 989: OK CT160 | vidro azul
+122,1005,,AVO CT160,,,,,33.0,,2.0,,,,,,,good,from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA
+123,1005,,AVO CT160,,,,,33.0,,2.35,,,,,,,good,from RMORG sheet row 998: OK CT160 | 2/2.35 a 33mA
+124,1017,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 1010: OKCT160
+125,1218,,,,,,,,,,,,,,,,weak,from RMORG sheet row 1211: FRACA
+126,1219,,TV2,,,,,,,,,,,,,,,from RMORG sheet row 1212: Padrão para o TV2
+127,1484,,,,,,,,,,,,,,,,good,from RMORG sheet row 1411: OK | Outra em CASA
+128,1485,,,,,,,,,,,,,,,,good,from RMORG sheet row 1412: OK
+129,1489,,,,,,,,,,,,,,,,good,from RMORG sheet row 1416: 2 novas OK por 5€cada Sr Helder ebay Radiolux
+130,1500,,,,,,,,,,,,,,,,good,from RMORG sheet row 1421: Testada OK apesar de menção OFF na Cx.
+131,1501,,AVO CT160,,250.0,-5.8,,25.0,,6.9,,,,,,,good,"from RMORG sheet row 1422: Testada OK origem Zé Manel . Valores CT160 -5,8V 250 200 4,2 +-25/29mA 6,9mA/V (second section read 29 mA; screen at 200 V)"
+132,1597,,,,,,,,,,,,,,,,weak,from RMORG sheet row 1502: FRACA
+133,1610,,AVO CT160,,,,,,,,,,,,,,,from RMORG sheet row 1515: +- CT160
+134,1624,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 1529: OK CT160
+135,1712,,,,,,,,,,,,,,,,leakage when cold,from RMORG sheet row 1624: Fuga de S a frio
+136,1747,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 1659: OFF filamento | s/Cx
+137,1748,,,,,,,,,,,,,,,,heater open,from RMORG sheet row 1660: OFF filamento
+138,1787,,TV2,,,,,,,,,,,,,,,from RMORG sheet row 1699: Padrão para o TV2
+139,1812,,,,,,,,,,,,,,,,good,from RMORG sheet row 1724: TUNGSRAM OK
+140,1813,,,,,,,,,,,,,,,,good,from RMORG sheet row 1725: TUNGSRAM OK
+141,1814,,,,,,,,,,,,,,,,good,from RMORG sheet row 1726: TUNGSRAM OK
+142,1815,,,,,,,,,,,,,,,,good,from RMORG sheet row 1727: sovietica OK
+143,1988,,AVO CT160,,,,,,,,,,,,,,good,from RMORG sheet row 1901: OK CT160
+144,2074,,,,,,,,,,,,,,,,fails when hot,from RMORG sheet row 1987: OFF quando quente | 10
