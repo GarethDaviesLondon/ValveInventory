@@ -3404,6 +3404,10 @@ class App(ttk.Frame):
         # them are database content and are deliberately left alone.
         self.set_status(tn("Interface language: English",
                            "Idioma da interface: Portugues"))
+        # Once, ever, the first time Portuguese is chosen - see i18n.GREETING.
+        if lang == "pt" and not i18n.greeted():
+            i18n.mark_greeted()
+            messagebox.showinfo(i18n.GREETING_TITLE, i18n.GREETING)
 
     def set_status(self, msg):
         """Writes msg to the status bar at the foot of the main window."""

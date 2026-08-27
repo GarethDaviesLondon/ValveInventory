@@ -438,26 +438,68 @@ def set_language(lang, root=None):
     save_language()
 
 
+def _state():
+    """The remembered settings dict, or an empty one if there is nothing to read."""
+    try:
+        with open(_STATE_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}     # no file, unreadable, corrupt - the defaults are all fine
+
+
 def load_language():
     """Read the remembered language, defaulting to English."""
     global LANG
-    try:
-        with open(_STATE_FILE, encoding="utf-8") as f:
-            lang = json.load(f).get("lang")
-        if lang in LANGS:
-            LANG = lang
-    except Exception:
-        pass          # no file, unreadable, corrupt - English is a fine default
+    lang = _state().get("lang")
+    if lang in LANGS:
+        LANG = lang
     return LANG
 
 
-def save_language():
-    """Remember the current language for next time. Failure is not worth a dialog."""
+def save_language(**extra):
+    """Remember the current language, and anything else passed, for next time.
+
+    Failure is silent on purpose: not being able to remember a language choice
+    is not worth interrupting someone with a dialog.
+    """
+    d = _state()
+    d["lang"] = LANG
+    d.update(extra)
     try:
         with open(_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"lang": LANG}, f)
+            json.dump(d, f)
     except OSError:
         pass
+
+
+def greeted():
+    """Whether the Portuguese welcome has already been shown once."""
+    return bool(_state().get("greeted"))
+
+
+def mark_greeted():
+    """Remember that it has, so it is a welcome and not a nag."""
+    save_language(greeted=True)
+
+
+# Shown once, the first time anyone puts the app into Portuguese. The point of
+# it is that the translation should not arrive silently, as though it had
+# always been there - somebody did this deliberately, for the person whose
+# collection this is.
+GREETING_TITLE = "Bem-vindo"
+GREETING = (
+    "Olá Hernani,\n\n"
+    "Esta tradução foi feita para si.\n\n"
+    "A colecção está catalogada em português, por isso pareceu justo que a "
+    "ferramenta que a mostra também falasse português. Os menus, os botões, os "
+    "cabeçalhos das colunas, o guia do utilizador e os manuais estão todos "
+    "traduzidos.\n\n"
+    "Os seus dados ficam exactamente como os escreveu - as designações, os nomes "
+    "das caixas, as marcas, as origens e as suas notas não foram tocados. Uma "
+    "válvula é uma EL84 em qualquer idioma.\n\n"
+    "As bandeiras no canto superior direito trocam de idioma quando quiser."
+)
 
 
 # --------------------------------------------------------------------------
