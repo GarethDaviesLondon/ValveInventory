@@ -1,7 +1,1 @@
 id,base,box,qty,condition,notes
-1,Octal,31,1,,"count unconfirmed - migrated from original sundry entry 'Various Sockets, Screening cans etc. Octal and 8pin and 9pin', verify physically"
-2,8-pin,31,1,,"count unconfirmed - migrated from original sundry entry 'Various Sockets, Screening cans etc. Octal and 8pin and 9pin', verify physically"
-3,9-pin,31,1,,"count unconfirmed - migrated from original sundry entry 'Various Sockets, Screening cans etc. Octal and 8pin and 9pin', verify physically (likely B9A)"
-4,5C20,Loose,3,,spare sockets for the 3x 807 stored loose; base per 807 datasheet
-5,unknown,Loose,2,,spare sockets for the 2x GU46 stored loose; GU46 datasheet did not state a conventional base designation - verify physically
-6,unknown,Loose,1,,socket (and chimney) stored with the 3CX1200A7 - no local datasheet to confirm base; original note flagged 'possibly not quite right'
