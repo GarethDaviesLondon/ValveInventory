@@ -2955,6 +2955,13 @@ class App(ttk.Frame):
         missing, points the user at docs/build_manuals.py to regenerate it
         rather than failing silently."""
         here = os.path.dirname(os.path.abspath(__file__))
+        # In Portuguese, prefer the translated PDF and fall back to the English
+        # one if it hasn't been built - a manual in the wrong language still
+        # beats an error dialog.
+        if i18n.LANG == "pt":
+            pt = os.path.join(here, "docs", filename.replace(".pdf", "_PT.pdf"))
+            if os.path.exists(pt):
+                filename = os.path.basename(pt)
         path = os.path.join(here, "docs", filename)
         if not os.path.exists(path):
             messagebox.showerror(

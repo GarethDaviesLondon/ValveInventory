@@ -3,7 +3,9 @@
 build_manuals.py - generates the four PDF manuals in docs/ from the content
 below. Re-run any time the tool changes enough to make them stale:
 
-    python3 docs/build_manuals.py
+    python3 docs/build_manuals.py             # the four English PDFs
+    python3 docs/build_manuals.py --lang pt   # the four Portuguese ones
+    python3 docs/build_manuals.py --coverage  # what still needs translating
 
 Requires reportlab (pip install reportlab) - not a runtime dependency of the
 tool itself, only needed to regenerate these PDFs.
@@ -21,8 +23,18 @@ Layout of this file:
     particular is meant to be kept current - add a "Version-specific notes"
     entry whenever a release needs anything beyond the standard procedure.
   - main(): builds all four PDFs.
+
+Translation. Every piece of prose in the four content functions reaches the
+page through one of the eight helpers above, so that is where the lookup
+lives - T() at the top of each - and not one line of manual content had to be
+touched to make the whole set translatable. The Portuguese sits in
+manual_pt.py, keyed by the exact English string; anything missing falls back
+to English rather than breaking, and --coverage prints what is still missing,
+per manual, so the gap is always a known quantity rather than a surprise.
 """
+import argparse
 import os
+import sys
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -35,6 +47,34 @@ from reportlab.platypus import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+LANG = "en"
+_missing = []        # English strings with no translation, in the order met
+_seen = set()
+
+try:
+    from manual_pt import PT
+except ImportError:          # building English only, or before PT exists
+    PT = {}
+
+
+def T(text):
+    """Translate one piece of manual prose, or return it unchanged.
+
+    Unchanged is the deliberate fallback: a manual with an untranslated
+    paragraph is still a usable manual, whereas one that raised on a missing
+    key would not build at all. Misses are recorded for --coverage.
+    """
+    if LANG == "en" or not isinstance(text, str) or not text.strip():
+        return text
+    hit = PT.get(text)
+    if hit is None:
+        if text not in _seen:
+            _seen.add(text)
+            _missing.append(text)
+        return text
+    return hit
 
 # ---------------------------------------------------------------- styling
 # Shared ParagraphStyle set used by every helper below and by all three
@@ -78,37 +118,38 @@ STYLES = {
 def title(text, subtitle=""):
     """Return the flowables for a document's title block: a Title paragraph,
     plus an optional subtitle paragraph beneath it. Used once per manual."""
-    out = [Paragraph(text, STYLES["title"])]
+    out = [Paragraph(T(text), STYLES["title"])]
     if subtitle:
-        out.append(Paragraph(subtitle, STYLES["subtitle"]))
+        out.append(Paragraph(T(subtitle), STYLES["subtitle"]))
     return out
 
 
 def h1(text):
     """Top-level numbered section heading (e.g. "1. Requirements")."""
-    return Paragraph(text, STYLES["h1"])
+    return Paragraph(T(text), STYLES["h1"])
 
 
 def h2(text):
     """Second-level heading, nested under an h1 section."""
-    return Paragraph(text, STYLES["h2"])
+    return Paragraph(T(text), STYLES["h2"])
 
 
 def h3(text):
     """Third-level heading, nested under an h2 subsection."""
-    return Paragraph(text, STYLES["h3"])
+    return Paragraph(T(text), STYLES["h3"])
 
 
 def p(text):
     """Standard body paragraph. text may contain reportlab's mini-HTML markup
     (<b>, <i>, <font face="Courier">, entities) since Paragraph interprets it."""
-    return Paragraph(text, STYLES["body"])
+    return Paragraph(T(text), STYLES["body"])
 
 
 def note(text):
     """A callout paragraph prefixed with a bold "Note:" label and shaded
     background, for asides that shouldn't be mistaken for main-flow text."""
-    return Paragraph(f"<b>Note:</b> {text}", STYLES["note"])
+    label = "Nota" if LANG == "pt" else "Note"
+    return Paragraph(f"<b>{label}:</b> {T(text)}", STYLES["note"])
 
 
 def code(text):
@@ -121,7 +162,7 @@ def bullets(items):
     """A bulleted list flowable from a list of markup strings, one bullet
     per item."""
     return ListFlowable(
-        [ListItem(Paragraph(t, STYLES["bullet"]), leftIndent=6) for t in items],
+        [ListItem(Paragraph(T(t), STYLES["bullet"]), leftIndent=6) for t in items],
         bulletType="bullet", start="\u2022", leftIndent=14, spaceAfter=10)
 
 
@@ -140,7 +181,7 @@ def table(rows, col_widths, header=True):
     wrapped = []
     for i, row in enumerate(rows):
         style = _TABLE_HEADER_STYLE if (header and i == 0) else _TABLE_CELL_STYLE
-        wrapped.append([Paragraph(str(cell), style) for cell in row])
+        wrapped.append([Paragraph(T(str(cell)), style) for cell in row])
     t = Table(wrapped, colWidths=col_widths, repeatRows=1 if header else 0)
     style = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -318,7 +359,7 @@ def installation_manual():
     s.append(code("rm valves.db          # del valves.db on Windows\npython3 valves_gui.py"))
     s.append(h2("Option B - keep the reference library, clear the stock"))
     s.append(p(
-        "The 253 researched valve types (function, base, heater, ratings) are useful on their "
+        "The researched valve types (function, base, heater, ratings) are useful on their "
         "own regardless of whose valves they are - keep that, wipe out the boxes and "
         "quantities that belong to the original owner's collection:"))
     s.append(code(
@@ -384,6 +425,22 @@ def user_manual():
         "<b>Docs</b> - a general reference library for material that isn't about one specific "
         "type - care-and-feeding guides, base wiring references, and the like.",
     ]))
+
+    s.append(h2("English or Portuguese"))
+    s.append(p(
+        "Two flags sit at the top right of the window. Click either to put the whole "
+        "interface into that language - menus, tab names, buttons, column headings, filter "
+        "captions, dialogs, the About box and the user guide all change together. The "
+        "choice is remembered for next time, and switching costs nothing: no window is "
+        "rebuilt, so your filters, the selected box and any open popup stay exactly as "
+        "they were."))
+    s.append(p(
+        "What does <i>not</i> change is the collection. Type designations, box names, "
+        "makers, origins and your own notes stay exactly as they were typed - a valve is "
+        "an EL84 in any language, and a bag labelled \u201cSaco Pingo Doce\u201d is called "
+        "that because that is what is written on it. The filter dropdowns are filled from "
+        "the database, so their contents stay in the language of the data too. Only the "
+        "tool's own wording moves."))
 
     s.append(h1("The Valves tab"))
     s.append(h2("Boxes sidebar"))
@@ -504,6 +561,12 @@ def user_manual():
         "tracked this way; blank means the lot is still just a quantity. New lots added with "
         "<b>Add stock</b> are tracked individually from the start unless the form says "
         "otherwise."))
+    s.append(p(
+        "The <b>Notes</b> column in that list is what was written about that one valve - a "
+        "serial read off the glass, “no box”, “another one at home”. It "
+        "belongs to the valve rather than the lot, which is the whole point of tracking "
+        "individually: a remark that applies to one valve out of six says nothing useful "
+        "once it has been pooled onto all six."))
 
     s.append(h2("Recording a test"))
     s.append(p(
@@ -514,7 +577,10 @@ def user_manual():
         "record holding nothing but a gm figure and a date is a perfectly good record."))
     s.append(table([
         ["Field", "Units", "What it is"],
-        ["Tested on, Tester", "", "When, and on what."],
+        ["Tested on, Tester", "", "When, and on what. A test dated 1901-01-01 is one "
+         "recovered from a written record that gave no date - nothing was tested in 1901, "
+         "the valve had not been invented, so the date reads unmistakably as “tested, "
+         "date unknown” rather than as a real measurement day."],
         ["Va, Vg at test", "V", "The conditions the readings were taken under. A gm figure "
                                 "means nothing without them."],
         ["Bias mode", "", "Fixed or auto. The same valve reads differently under each."],
@@ -581,7 +647,7 @@ def user_manual():
         "A faceted filter across all held types, closer to a shopping-site filter panel than "
         "a search box."))
     s.append(bullets([
-        "<b>Category, Base, Family, Confidence, Variable-mu</b> - dropdowns that "
+        "<b>Category, Base, Family, Confidence, Variable-mu, Tested</b> - dropdowns that "
         "<i>cascade</i>: picking one narrows what the others still offer, so you never land "
         "on an empty combination. Category is a coarser bucket than the raw function text "
         "(Triode, Double triode, Tetrode, Pentode, Triode-pentode, Rectifier, and so on) - "
@@ -596,6 +662,20 @@ def user_manual():
         "Click a heading to sort. <b>Double-click a type</b> for a popup showing its full "
         "reference record, datasheet/web-search buttons, and a box-by-box breakdown of "
         "exactly where and how many you hold."))
+    s.append(p(
+        "In that popup, <b>double-click one of the box rows</b> to drop straight into the "
+        "individual valves of that lot. It is the same window the Valves tab reaches "
+        "through <b>Individual valves...</b>, so a valve found by browsing behaves exactly "
+        "like one found by searching - you can read its notes, see its test history and "
+        "record a new test without going back to the Valves tab."))
+    s.append(p(
+        "The <b>Tested</b> facet narrows the list to types that hold at least one tested "
+        "valve, or to those that hold none, and the <b>Tested</b> column counts them. The "
+        "Valves tab carries the same filter for lots, beside its numeric fields, with a "
+        "<b>Tstd</b> column next to <b>Ind</b>. Both count a lot or a type as tested when "
+        "at least one valve in it has at least one recorded test; a lot with no individual "
+        "valve rows at all therefore reads as untested, because nothing in it has been "
+        "tested."))
 
     s.append(h1("The Repair Bench tab"))
     s.append(p(
@@ -707,6 +787,17 @@ def technical_manual():
         "Architecture, schema, and internals - for anyone extending the tool, scripting "
         "against the database directly, or just wanting to know how a feature actually "
         "works under the hood."))
+
+    if LANG == "pt":
+        # Said plainly rather than left for the reader to work out from the
+        # first English paragraph they hit.
+        s.append(note(
+            "Este manual está traduzido apenas em parte. Os títulos, as tabelas de "
+            "referência e a lista completa de comandos estão em português; o texto mais "
+            "detalhado sobre o funcionamento interno continua em inglês, porque se destina "
+            "a ser lido ao lado do código - que está em inglês de qualquer forma. Os "
+            "manuais do Utilizador, de Instalação e de Actualização estão traduzidos na "
+            "íntegra."))
 
     s.append(h1("1. Architecture"))
     s.append(p(
@@ -1209,6 +1300,20 @@ def upgrade_guide():
         "record what each release actually changed about the database, and are worth a read "
         "before upgrading - but if there's nothing here for the version you're moving to, "
         "the standard procedure is all you need."))
+    s.append(h2("v1.5"))
+    s.append(p(
+        "No schema change at all - this release is interface only, so the standard "
+        "procedure covers it and your database is untouched. It adds a Portuguese "
+        "translation of the whole interface and of the manuals, switched with the two "
+        "flags at the top right of the window; a tested/untested filter on the Valves and "
+        "Browse tabs; a Notes column on the individual-valves list; and a double-click "
+        "route from a Browse result's box breakdown straight into that lot's individual "
+        "valves."))
+    s.append(note(
+        "The interface language is remembered in a file called "
+        "<font face=\"Courier\">.lang</font> beside the database. It holds nothing but the "
+        "chosen language, is per-machine rather than part of the collection, and is not "
+        "version-controlled - delete it and the app simply opens in English."))
     s.append(h2("v1.4"))
     s.append(p(
         "Adds six optional columns to the <font face=\"Courier\">stock</font> table - "
@@ -1262,12 +1367,49 @@ def upgrade_guide():
     return s
 
 
+MANUALS = [
+    ("INSTALLATION_MANUAL", "installation_manual"),
+    ("USER_MANUAL", "user_manual"),
+    ("TECHNICAL_MANUAL", "technical_manual"),
+    ("UPGRADE_GUIDE", "upgrade_guide"),
+]
+
+
 def main():
-    """Build all four manual PDFs."""
-    build("INSTALLATION_MANUAL.pdf", installation_manual())
-    build("USER_MANUAL.pdf", user_manual())
-    build("TECHNICAL_MANUAL.pdf", technical_manual())
-    build("UPGRADE_GUIDE.pdf", upgrade_guide())
+    """Build all four manual PDFs, in English or Portuguese."""
+    global LANG
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--lang", default="en", choices=("en", "pt"),
+                    help="language to build (default en)")
+    ap.add_argument("--coverage", action="store_true",
+                    help="report untranslated strings per manual and write nothing")
+    a = ap.parse_args()
+    LANG = "pt" if a.coverage else a.lang
+
+    if a.coverage:
+        LANG = "pt"
+        total_missing = total_strings = 0
+        for stem, fname in MANUALS:
+            _missing.clear()
+            _seen.clear()
+            before = len(PT)
+            globals()[fname]()
+            done = 0
+            for k in PT:
+                done += 1
+            print("%-22s %4d untranslated" % (stem, len(_missing)))
+            total_missing += len(_missing)
+        print("\n%d untranslated string(s) across the four manuals; "
+              "%d translations available" % (total_missing, len(PT)))
+        return
+
+    # Portuguese PDFs get a _PT suffix so both sets sit in docs/ together.
+    suffix = "_PT" if LANG == "pt" else ""
+    for stem, fname in MANUALS:
+        build(f"{stem}{suffix}.pdf", globals()[fname]())
+    if LANG == "pt" and _missing:
+        print(f"\n{len(_missing)} string(s) still in English - "
+              f"run --coverage to list them by manual")
 
 
 if __name__ == "__main__":
