@@ -11,6 +11,10 @@ to a working database in a few minutes.
   Debian/Ubuntu you may need `sudo apt install python3-tk`.
 - `openpyxl` only if you want to export to Excel: `pip install openpyxl`.
 
+On Windows, and new to all of this? `docs/GETTING_STARTED_EN_PT.pdf` walks
+through the same thing one step at a time, English and Portuguese side by
+side, including which of the two black windows the commands belong in.
+
 ## 2. Unzip and rebuild the database
 
 The database itself (`valves.db`) isn't included - it's binary and would

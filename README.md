@@ -70,11 +70,12 @@ collection, I'd like to hear about it.
 | `import_researched.py` | Applies a research assistant's reply back into the database — see "Filling in the reference data" below. |
 | `QUICKSTART.md` | Standalone install/use walkthrough, bundled into `Export archive and tools`. |
 | `docs/` | The four PDF manuals (Installation, User, Technical, Upgrade) and `build_manuals.py`, which regenerates them. Also linked from the GUI's Help menu. |
+| `docs/GETTING_STARTED_EN_PT.pdf` | One-path first launch on Windows, English and Portuguese side by side, for somebody who was sent an export and doesn't use a command line. `build_getting_started.py` regenerates it. |
 
 Requires Python 3.8+. `openpyxl` is only needed for export; `tkinter` only for the
 GUI — on most systems it ships with Python, but Debian and Ubuntu split it out
 into `python3-tk`. `reportlab` is only needed to regenerate the PDF manuals in
-`docs/` (`python3 docs/build_manuals.py`).
+`docs/` (`python3 docs/build_manuals.py`, `python3 docs/build_getting_started.py`).
 
 ## The window
 
